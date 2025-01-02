@@ -2,6 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
+import pandas as pd
 import time
 from bs4 import BeautifulSoup
 
@@ -47,10 +48,36 @@ def fetch_metal_prices_firefox(date: str):
     finally:
         driver.quit()
 
-# Example usage
+def get_metal_prices(from_date: str, to_date: str, metals: list, save_csv: bool = False):
+    """
+    Fetch metal prices for a range of dates and save to separate CSV files if requested.
+    """
+    metal_prices = {metal: [] for metal in metals}
+
+    # Iterate over the date range
+    for date in pd.date_range(from_date, to_date):
+        print(f"Fetching metal prices for {date.strftime('%Y-%m-%d')}...")
+        date_str = date.strftime('%Y-%m-%d')
+        prices = fetch_metal_prices_firefox(date_str)
+        if prices:
+            for metal in metals:
+                if metal in prices:
+                    price, unit = prices[metal]
+                    metal_prices[metal].append({'Date': date_str, 'Price': price, 'Unit': unit})
+
+    if save_csv:
+        # Save each metal's data to a separate CSV file in the 'data' folder
+        for metal, records in metal_prices.items():
+            if records:  # Only save if there are records
+                df = pd.DataFrame(records)
+                filename = f"data/{metal.replace(' ', '_')}_prices.csv"
+                df.to_csv(filename, index=False)
+                print(f"Saved {metal} data to {filename}")
+
+    return metal_prices
+
 date = '2024-12-24'
-prices = fetch_metal_prices_firefox(date)
-if prices:
-    print(f'Metal prices for {date}:')
-    for metal, (price, unit) in prices.items():
-        print(f'{metal}: {price} per {unit}')
+metals = ['Nickel', 'Copper', 'Lithium', 'Cobalt']
+from_date = '2024-12-01'
+to_date = '2024-12-31'
+metal_prices = get_metal_prices(from_date, to_date, metals, save_csv=True)
