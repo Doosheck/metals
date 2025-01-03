@@ -65,10 +65,12 @@ def get_metal_prices(
     Fetch metal prices for a range of dates and save to separate CSV files if requested.
     """
     metal_prices = {metal: [] for metal in metals}
+    fetch_times = []
 
     # Iterate over the date range
-    for date in pd.date_range(from_date, to_date):
+    for i, date in enumerate(pd.date_range(from_date, to_date)):
         if date.weekday() < 5:  # Only fetch prices for weekdays (0=Monday, 4=Friday)
+            start_time = time.time()
             print(f"Fetching metal prices for {date.strftime('%Y-%m-%d')}...")
             date_str = date.strftime("%Y-%m-%d")
             prices = fetch_metal_prices_firefox(date_str)
@@ -79,6 +81,19 @@ def get_metal_prices(
                         metal_prices[metal].append(
                             {"Date": date_str, "Price": price, "Unit": unit}
                         )
+            fetch_times.append(time.time() - start_time)
+
+            # Print estimated time remaining after every 10 fetches
+            if (i + 1) % 10 == 0:
+                avg_time_per_day = sum(fetch_times[-10:]) / 10
+                remaining_days = len(pd.date_range(date + pd.Timedelta(days=1), to_date, freq='B'))
+                estimated_time_remaining = avg_time_per_day * remaining_days
+                if estimated_time_remaining > 60:
+                    estimated_time_remaining /= 60
+                    estimated_time_remaining = round(estimated_time_remaining, 0)
+                    print(f"Estimated time remaining: {estimated_time_remaining:.0f} minutes")
+                else:
+                    print(f"Estimated time remaining: {estimated_time_remaining:.2f} seconds")
 
     if save_csv:
         # Save each metal's data to a separate CSV file in the 'data' folder
