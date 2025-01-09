@@ -102,7 +102,7 @@ def get_metal_prices(
                 df = pd.DataFrame(records)
                 if not os.path.exists("data"):
                     os.makedirs("data")
-                filename = f"data/{metal.replace(' ', '_')}_prices.csv"
+                filename = f"data/{metal.replace(' ', '_')}_prices_{from_date}_to_{to_date}.csv"
                 df.to_csv(filename, index=False)
                 print(f"Saved {metal} data to {filename}")
 
