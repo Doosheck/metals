@@ -15,11 +15,11 @@ library(PerformanceAnalytics)
 
 ```{r}
 getwd()
-setwd("C:/Users/user/OneDrive/Dokumenty/R/classes2024")
+# setwd("C:/Users/user/OneDrive/Dokumenty/R/classes2024")
 list.files()
-setwd("C:/Users/KE/Documents/R/classes_2024")
-sp500prices <- read.csv("sp500prCl.csv", dec=".", sep = ";")
-sp500prices
+setwd("/Users/michal/Documents/Code/metals")
+sp500prices <- read.csv("sp500prCl.csv", dec = ".", sep = ";")
+# sp500prices
 # Plot daily S&P 500 prices
 plot(sp500prices$Price)
 class(sp500prices)
@@ -28,8 +28,8 @@ class(sp500prices)
 
 ```{r}
 stockdata <- sp500prices
-date <- as.POSIXct(strptime(stockdata$Data, format ="%Y-%m-%d"))  # "%Y-%m-%d"  "%d.%m.%Y"
-#date
+date <- as.POSIXct(strptime(stockdata$Data, format = "%Y-%m-%d")) # "%Y-%m-%d"  "%d.%m.%Y"
+# date
 sp500prices1 <- xts(stockdata[2:ncol(stockdata)], order.by = date) #
 rm(stockdata)
 
@@ -40,8 +40,8 @@ head(sp500prices1$Price)
 
 ```{r}
 # Compute daily returns
-#sp500ret <- diff(log(sp500prices1))
-sp500ret <- CalculateReturns(sp500prices1)       #watch the dog! first ret is zero!
+# sp500ret <- diff(log(sp500prices1))
+sp500ret <- CalculateReturns(sp500prices1) # watch the dog! first ret is zero!
 sp500ret <- sp500ret[-1, ]
 # Check the class of sp500ret
 class(sp500ret)
@@ -52,29 +52,33 @@ plot(sp500ret)
 
 
 ```{r}
-# Compute the daily standard deviation for the complete sample   
+# Compute the daily standard deviation for the complete sample
 sd(sp500ret)
 
 # Compute the annualized volatility for the complete sample
 sqrt(252) * sd(sp500ret)
 
-# Compute the annualized standard deviation for the year 2009 
+# Compute the annualized standard deviation for the year 2009
 sqrt(252) * sd(sp500ret["2009"])
 
-# Compute the annualized standard deviation for the year 2017 
+# Compute the annualized standard deviation for the year 2017
 sqrt(252) * sd(sp500ret["2017"])
 ```
 ```{r}
 # Showing two plots on the same figure
-par(mfrow=c(2,1)) 
+par(mfrow = c(2, 1))
 
 # Compute the rolling 1 month estimate of annualized volatility
-chart.RollingPerformance(R = sp500ret["2000::2017"], width = 22,
-     FUN = "sd.annualized", scale = 252, main = "One month rolling volatility")
+chart.RollingPerformance(
+     R = sp500ret["2000::2017"], width = 22,
+     FUN = "sd.annualized", scale = 252, main = "One month rolling volatility"
+)
 
 # Compute the rolling 3 months estimate of annualized volatility
-chart.RollingPerformance(R = sp500ret["2000::2017"], width = 66,
-     FUN = "sd.annualized", scale = 252, main = "Three months rolling volatility")
+chart.RollingPerformance(
+     R = sp500ret["2000::2017"], width = 66,
+     FUN = "sd.annualized", scale = 252, main = "Three months rolling volatility"
+)
 ```
 ## Compute absolute value of the prediction errors
 
@@ -86,7 +90,7 @@ m <- mean(sp500ret)
 e <- sp500ret - m
 
 # Plot the absolute value of the prediction errors
-par(mfrow = c(2,1),mar = c(3, 2, 2, 2))
+par(mfrow = c(2, 1), mar = c(3, 2, 2, 2))
 plot(abs(e))
 
 # Plot the acf of the absolute prediction errors
@@ -95,7 +99,7 @@ acf(abs(e), lag.max = 20)
 # GARCH:
 
 ```{r}
-#Define parameters and numerics
+# Define parameters and numerics
 alpha <- 0.1
 beta <- 0.8
 omega <- var(sp500ret) * (1 - alpha - beta)
@@ -105,9 +109,9 @@ nobs <- length(sp500ret)
 predvar <- rep(NA, nobs)
 
 # Compute the predicted variances
-predvar[1] <- var(sp500ret) 
-for(t in 2:nobs){
-   predvar[t] <- omega + alpha * e2[t-1] + beta * predvar[t-1]
+predvar[1] <- var(sp500ret)
+for (t in 2:nobs) {
+     predvar[t] <- omega + alpha * e2[t - 1] + beta * predvar[t - 1]
 }
 
 # Create annualized predicted volatility
@@ -119,16 +123,18 @@ plot(ann_predvol["2008::2009"], main = "Ann. S&P 500 vol in 2008-2009")
 # Time for rugarch package
 
 ```{r}
-install.packages("rugarch")
+# install.packages("rugarch")
 library(rugarch)
 ```
 
 
 ```{r}
 # Specify a standard GARCH model with constant mean
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                 variance.model = list(model = "sGARCH"), 
-                 distribution.model = "norm")
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "sGARCH"),
+     distribution.model = "norm"
+)
 
 # Estimate the model
 garchfit <- ugarchfit(data = sp500ret, spec = garchspec)
@@ -136,8 +142,8 @@ garchfit <- ugarchfit(data = sp500ret, spec = garchspec)
 # See the resutls:
 garchfit
 
-# Use the method sigma to retrieve the estimated volatilities 
-garchvol <- sigma(garchfit) 
+# Use the method sigma to retrieve the estimated volatilities
+garchvol <- sigma(garchfit)
 garch_mean <- fitted(garchfit)
 
 # Plot the volatility for 2017
@@ -151,7 +157,7 @@ sqrt(uncvariance(garchfit))
 # Print last 10 ones in garchvol
 tail(garchvol, 10)
 
-# Forecast volatility 5 days ahead and add 
+# Forecast volatility 5 days ahead and add
 garchforecast <- ugarchforecast(fitORspec = garchfit, n.ahead = 5)
 
 # Extract the predicted volatilities and print them
@@ -161,32 +167,33 @@ print(sigma(garchforecast))
 # Volatility targeting
 
 ```{r}
-#When you target a portfolio with 5% annualized volatility, and the annualized volatility of the risky asset is, then you should invest in the risky asset.
+# When you target a portfolio with 5% annualized volatility, and the annualized volatility of the risky asset is, then you should invest in the risky asset.
 
 # Compute the annualized volatility
 annualvol <- sqrt(252) * sigma(garchfit)
 
-# Compute the 5% vol target weights  
+# Compute the 5% vol target weights
 vt_weights <- 0.05 / annualvol
 
 # Compare the annualized volatility to the portfolio weights in a plot
 plot(merge(annualvol, vt_weights), multi.panel = TRUE)
-
 ```
 # Application of the GARCH models to the data:
 
 ```{r}
-#generate ret series" 
-#list(mu = 0, ar1 = 0, ma1 = 0, omega = 6*10^(-7), alpha1 = 0.07, beta1 = 0.9, skew = 0.9, shape = 5)
+# generate ret series"
+# list(mu = 0, ar1 = 0, ma1 = 0, omega = 6*10^(-7), alpha1 = 0.07, beta1 = 0.9, skew = 0.9, shape = 5)
 ret <- sp500ret
 # Plot the return series
 
 plot(ret)
 
 # Specify the garch model to be used
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                       variance.model = list(model = "sGARCH"),
-                        distribution.model = 'sstd')
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "sGARCH"),
+     distribution.model = "sstd"
+)
 
 # Estimate the model
 garchfit <- ugarchfit(data = ret, spec = garchspec)
@@ -199,7 +206,7 @@ garch_mean <- fitted(garchfit)
 # Inspect the coefficients
 coef(garchfit)
 
-#See the whole output
+# See the whole output
 garchfit
 ```
 
@@ -210,18 +217,22 @@ stdret <- residuals(garchfit, standardize = TRUE)
 # Compute the standardized returns using fitted() and sigma()
 stdret <- (ret - fitted(garchfit)) / sigma(garchfit)
 
-chart.Histogram(stdret, methods = c("add.normal","add.density" ), 
-                colorset = c("gray","red","blue"))
+chart.Histogram(stdret,
+     methods = c("add.normal", "add.density"),
+     colorset = c("gray", "red", "blue")
+)
 ```
 
 ## Leverage effect:
 ```{r}
 # Specify the GJR GARCH model
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                 variance.model = list(model = 'gjrGARCH'),
-                 distribution.model = 'sstd')
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "gjrGARCH"),
+     distribution.model = "sstd"
+)
 
-# Estimate the model and compute volatility  
+# Estimate the model and compute volatility
 gjrgarchfit <- ugarchfit(data = sp500ret, spec = garchspec)
 gjrgarchvol <- sigma(gjrgarchfit)
 ```
@@ -230,12 +241,14 @@ gjrgarchvol <- sigma(gjrgarchfit)
 
 ```{r}
 # Specify AR(1)-GJR GARCH model
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(1,2)),
-                        variance.model = list(model = "gjrGARCH"),
-                        distribution.model = "sstd")
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(1, 2)),
+     variance.model = list(model = "gjrGARCH"),
+     distribution.model = "sstd"
+)
 
 # Estimate the model
-garchfit <- ugarchfit(data = sp500ret, spec=garchspec)
+garchfit <- ugarchfit(data = sp500ret, spec = garchspec)
 
 # Print the first four coefficients
 coef(garchfit)[c(1:4)]
@@ -244,11 +257,13 @@ coef(garchfit)[c(1:4)]
 ## APARCH
 
 ```{r}
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,1)),
-                        variance.model = list(model = "apARCH"),
-                        distribution.model = "std")
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 1)),
+     variance.model = list(model = "apARCH"),
+     distribution.model = "std"
+)
 # Estimate the model
-aparchfit <- ugarchfit(data = sp500ret, spec=garchspec)
+aparchfit <- ugarchfit(data = sp500ret, spec = garchspec, solver = "hybrid")
 aparchvol <- sigma(aparchfit)
 aparchmean <- fitted(aparchfit)
 ```
@@ -258,10 +273,10 @@ aparchmean <- fitted(aparchfit)
 The conditional density to use for the innovations. Valid choices are “norm” for the normal distibution, “snorm” for the skew-normal distribution, “std” for the student-t, “sstd” for the skew-student, “ged” for the generalized error distribution, “sged” for the skew-generalized error distribution, “nig” for the normal inverse gaussian distribution, “ghyp” for the Generalized Hyperbolic, and “jsu” for Johnson's SU distribution. 
 
 ```{r}
-# Compare volatility 
+# Compare volatility
 plotvol <- plot(abs(sp500ret), col = "grey")
-plotvol <- addSeries(gjrgarchvol, col = "red", on=1)
-plotvol <- addSeries(garchvol, col = "blue", on=1)  
+plotvol <- addSeries(gjrgarchvol, col = "red", on = 1)
+plotvol <- addSeries(garchvol, col = "blue", on = 1)
 plotvol <- addSeries(aparchvol, col = "green3", on = 1)
 plotvol
 ```
@@ -271,7 +286,7 @@ plotvol
 # GARCH-in-Mean specification and estimation 
 
 ```{r}
-gim_garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0), archm = TRUE, archpow = 2), variance.model = list(model = "gjrGARCH"), distribution.model = "sstd")
+gim_garchspec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), archm = TRUE, archpow = 2), variance.model = list(model = "gjrGARCH"), distribution.model = "sstd")
 gim_garchfit <- ugarchfit(data = sp500ret, spec = gim_garchspec)
 gim_garchfit
 # Predicted mean returns and volatility of GARCH-in-mean
@@ -302,13 +317,13 @@ rflexgarchspec <- gim_garchspec
 setfixed(rflexgarchspec) <- list(archm = 1, skew = 1)
 
 # Estimate the restricted GARCH model #EURUSDret
-rflexgarchfit <- ugarchfit(data = sp500ret,  spec = rflexgarchspec)
+rflexgarchfit <- ugarchfit(data = sp500ret, spec = rflexgarchspec)
 rflexgarchfit
 
 # Compare the volatility of the unrestricted and restriced GARCH models
 plotvol <- plot(abs(sp500ret), col = "grey")
-plotvol <- addSeries(sigma(gim_garchfit), col = "black", lwd = 4, on=1 )
-plotvol <- addSeries(sigma(rflexgarchfit), col = "red", on=1)
+plotvol <- addSeries(sigma(gim_garchfit), col = "black", lwd = 4, on = 1)
+plotvol <- addSeries(sigma(rflexgarchfit), col = "red", on = 1)
 plotvol
 ```
 
@@ -337,7 +352,6 @@ forecast_garch <- ugarchforecast(garchfit, n.ahead = 10)
 sigma_forecast_garch <- forecast_garch@forecast$sigmaFor
 
 cbind(sigma_forecast_gim, sigma_forecast_garch)
-
 ```
 
 #Variance targeting
@@ -350,10 +364,14 @@ In the estimation of GARCH models we can exploit this mean reversion behavior of
 
 ```{r}
 # Complete the specification to do variance targeting
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                        variance.model = list(model = "sGARCH",
-                                             variance.targeting = TRUE),
-                        distribution.model = "std")
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(
+          model = "sGARCH",
+          variance.targeting = TRUE
+     ),
+     distribution.model = "std"
+)
 
 # Estimate the model
 garchfit <- ugarchfit(data = sp500ret, spec = garchspec)
@@ -368,26 +386,30 @@ all.equal(sqrt(uncvariance(garchfit)), sd(sp500ret), tol = 1e-4)
 
 ```{r}
 # Specify model with AR(1) dynamics, GJR GARCH and skewed student t
-flexgarchspec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)),
-                            variance.model = list(model = 'gjrGARCH'),
-                            distribution.model = 'sstd')
+flexgarchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(1, 0)),
+     variance.model = list(model = "gjrGARCH"),
+     distribution.model = "sstd"
+)
 
 # Estimate the model
 flexgarchfit <- ugarchfit(data = sp500ret, spec = flexgarchspec)
-# Complete and study the statistical significance of the estimated parameters  
-round(flexgarchfit@fit$matcoef,6)
-#str(flexgarchfit)
+# Complete and study the statistical significance of the estimated parameters
+round(flexgarchfit@fit$matcoef, 6)
+# str(flexgarchfit)
 ```
 A comment for the skew parameter: The skewed student t skewness parameter is statistically significantly different from zero. However 0 is not an interesting value to compare with for the skewness parameter. We should compare it with 1, since the the distribution is symmetric if the skewed student t skewness parameter equals one. Here the estimated skewness parameter is 0.917 and its standard error equals 0.0143. The estimate is thus more than two standard errors away from one and thus we can conclude that the skewness parameter is different from one and that the distribution is thus not symmetric. 
 
 ```{r}
 # Specify model with constant mean, standard GARCH and student t
-tgarchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                         variance.model = list(model = 'gjrGARCH', variance.targeting = TRUE),
-                         distribution.model = 'sstd')
+tgarchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "gjrGARCH", variance.targeting = TRUE),
+     distribution.model = "sstd"
+)
 
 # Fix the mu parameter at zero
- setfixed(tgarchspec) <- list("mu" = 0)
+setfixed(tgarchspec) <- list("mu" = 0)
 
 # Estimate the model
 tgarchfit <- ugarchfit(data = sp500ret, spec = tgarchspec)
@@ -402,7 +424,7 @@ plot(sigma(tgarchfit) - sigma(flexgarchfit))
 ```{r}
 # Compute prediction errors
 garcherrors <- residuals(garchfit)
-gjrerrors  <- residuals(tgarchfit)
+gjrerrors <- residuals(tgarchfit)
 
 # Compute MSE for variance prediction of garchfit model
 mean((sigma(garchfit)^2 - garcherrors^2)^2)
@@ -438,7 +460,7 @@ infocriteria(tgarchfit)
 ```{r}
 # Compute the standardized residuals
 stdret <- residuals(tgarchfit, standardize = TRUE)
- 
+
 # Compute their sample mean and standard deviation
 mean(stdret)
 sd(stdret)
@@ -465,11 +487,13 @@ Box.test(abs(stdsp500ret), 22, type = "Ljung-Box")
 
 ```{r}
 # Estimate the model on the last 1000 observations
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                        variance.model = list(model = "sGARCH"),
-                        distribution.model = "std")
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "sGARCH"),
+     distribution.model = "std"
+)
 garchfit1000 <- ugarchfit(data = tail(sp500ret, 1000), spec = garchspec)
-round(garchfit1000@fit$matcoef,4)
+round(garchfit1000@fit$matcoef, 4)
 
 # Compute standardized returns
 stdret <- residuals(garchfit1000, standardize = TRUE)
@@ -485,9 +509,11 @@ Box.test(abs(stdret), 22, type = "Ljung-Box")
 garchinsample <- ugarchfit(data = sp500ret, spec = garchspec)
 garchvolinsample <- sigma(garchinsample)
 
-# Use ugarchroll for rolling estimation of the GARCH model 
-garchroll <- ugarchroll(garchspec, data = sp500ret, 
-     n.start = 2000, refit.window = 'moving', refit.every = 2500)
+# Use ugarchroll for rolling estimation of the GARCH model
+garchroll <- ugarchroll(garchspec,
+     data = sp500ret,
+     n.start = 2000, refit.window = "moving", refit.every = 2500
+)
 
 # Set preds to the data frame with rolling predictions
 preds <- as.data.frame(garchroll)
@@ -497,7 +523,7 @@ volplot <- plot(garchvolinsample, col = "darkgrey", ylim = c(-0.1, 0.1))
 volplot <- addSeries(garchvolroll, on = 1, col = "blue")
 plot(volplot, main = "In-sample versus rolling vol forecasts")
 
-#? not visible
+# ? not visible
 ```
 
 # The proof of the pudding is in the eating.
@@ -511,26 +537,30 @@ head(garchpreds, 3)
 
 ```{r}
 # Compute prediction errors
-e  <- garchpreds$Realized - garchpreds$Mu  
-d  <- e^2 - garchpreds$Sigma^2 
+e <- garchpreds$Realized - garchpreds$Mu
+d <- e^2 - garchpreds$Sigma^2
 
 # Compute MSE for the garchroll variance prediction
 garchMSE <- mean(d^2)
 # Compute MSE for gjrgarchroll
-gjrgarchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                 variance.model = list(model = 'gjrGARCH'),
-                 distribution.model = 'std')
+gjrgarchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "gjrGARCH"),
+     distribution.model = "std"
+)
 
-gjrgarchroll <- ugarchroll(gjrgarchspec, data = sp500ret, 
-     n.start = 2000, refit.window = 'moving', refit.every = 2500)
+gjrgarchroll <- ugarchroll(gjrgarchspec,
+     data = sp500ret,
+     n.start = 2000, refit.window = "moving", refit.every = 2500
+)
 
 gjrgarchpreds <- as.data.frame(gjrgarchroll)
-e  <- gjrgarchpreds$Realized - gjrgarchpreds$Mu 
-d  <- e^2 - gjrgarchpreds$Sigma^2 
+e <- gjrgarchpreds$Realized - gjrgarchpreds$Mu
+d <- e^2 - gjrgarchpreds$Sigma^2
 gjrgarchMSE <- mean(d^2)
 
 (gjrgarchMSE - garchMSE) / garchMSE
-#When doing rolling sample GARCH model predictions, the comparison is fair. You only use the returns available at the time of prediction. As such you are not exposed to look-ahead bias nor to overfitting, since the data used for the prediction is different from the actual return used to evaluate this prediction. The best predicting model wins. Depending on the application, the winner can be a simple model or a complex model. 
+# When doing rolling sample GARCH model predictions, the comparison is fair. You only use the returns available at the time of prediction. As such you are not exposed to look-ahead bias nor to overfitting, since the data used for the prediction is different from the actual return used to evaluate this prediction. The best predicting model wins. Depending on the application, the winner can be a simple model or a complex model.
 ```
 
 # VaR:
@@ -539,7 +569,7 @@ gjrgarchMSE <- mean(d^2)
 # Extract the dataframe with predictions from the rolling GARCH estimation
 garchpreds <- as.data.frame(garchroll)
 
-# Extract the 5% VaR 
+# Extract the 5% VaR
 garchVaR <- quantile(garchroll, probs = 0.05)
 
 # Extract the volatility from garchpreds
@@ -562,26 +592,30 @@ normgarchspec <- ugarchspec(distribution.model = "norm")
 sstdgarchspec <- ugarchspec(distribution.model = "sstd")
 
 # Do rolling estimation
-normgarchroll <- ugarchroll(normgarchspec, data = sp500ret, 
-                            n.start = 2500, refit.window = 'moving', refit.every = 2000)
-sstdgarchroll <- ugarchroll(sstdgarchspec, data = sp500ret, 
-                            n.start = 2500, refit.window = 'moving', refit.every = 2000)
+normgarchroll <- ugarchroll(normgarchspec,
+     data = sp500ret,
+     n.start = 2500, refit.window = "moving", refit.every = 2000
+)
+sstdgarchroll <- ugarchroll(sstdgarchspec,
+     data = sp500ret,
+     n.start = 2500, refit.window = "moving", refit.every = 2000
+)
 # Compute the 5% value at risk
 normgarchVaR <- quantile(normgarchroll, probs = 0.05)
 sstdgarchVaR <- quantile(sstdgarchroll, probs = 0.05)
 
 # Compute the coverage
-actual <- xts(as.data.frame(normgarchroll)$Realized,time(normgarchVaR))
-mean(actual<normgarchVaR)
-mean(actual<sstdgarchVaR)
-#The coverage is clearly better when using a skewed student t distribution. Modelling correctly the distribution is of utmost important for getting the quantiles (and thus the value-at-risk) right. Note that in the implementation we took 2000 observations to reduce the computation time in this example. In practice you will be able to improve performance by re-estimating at a higher frequency. 
+actual <- xts(as.data.frame(normgarchroll)$Realized, time(normgarchVaR))
+mean(actual < normgarchVaR)
+mean(actual < sstdgarchVaR)
+# The coverage is clearly better when using a skewed student t distribution. Modelling correctly the distribution is of utmost important for getting the quantiles (and thus the value-at-risk) right. Note that in the implementation we took 2000 observations to reduce the computation time in this example. In practice you will be able to improve performance by re-estimating at a higher frequency.
 ```
 
 # Fit the model to a particular period:
 
 ```{r}
 # Estimate the model
-garchfit <- ugarchfit(data = sp500ret['/2006/12'], spec = garchspec)
+garchfit <- ugarchfit(data = sp500ret["/2006/12"], spec = garchspec)
 
 # Fix the parameters
 progarchspec <- garchspec
@@ -595,15 +629,21 @@ plot(sigma(garchfilter))
 ## Compare the forecasts for different periods
 
 ```{r}
-garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                        variance.model = list(model = "sGARCH",
-                                             variance.targeting = FALSE),
-                        distribution.model = "std")
+garchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(
+          model = "sGARCH",
+          variance.targeting = FALSE
+     ),
+     distribution.model = "std"
+)
 
 # Compare the 252 days ahead forecasts made at the end of September 2008 and September 2017
-progarchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
-                        variance.model = list(model = "sGARCH"),
-                        distribution.model = "std")
+progarchspec <- ugarchspec(
+     mean.model = list(armaOrder = c(0, 0)),
+     variance.model = list(model = "sGARCH"),
+     distribution.model = "std"
+)
 
 ### check how it works now:
 garchfit2008 <- ugarchfit(data = sp500ret["/2008-09"], spec = garchspec)
@@ -611,22 +651,22 @@ garchfor2008 <- ugarchforecast(fitORspec = garchfit2008, n.ahead = 252)
 garchfit2017 <- ugarchfit(data = sp500ret["/2017-09"], spec = garchspec)
 garchfor2017 <- ugarchforecast(fitORspec = garchfit2017, n.ahead = 252)
 
-#plot
-par(mfrow = c(2,1), mar = c(3,2,3,2))
+# plot
+par(mfrow = c(2, 1), mar = c(3, 2, 3, 2))
 plot(sigma(garchfor2008), main = "/2008-09", type = "l")
 plot(sigma(garchfor2017), main = "/2017-09", type = "l")
 ```
 
 
 ```{r}
-#we apply here an earlier specification with GARCH-in-Mean gim_
-gim_garchfit <- ugarchfit(data = sp500ret["/2008-09"], spec = gim_garchspec) 
+# we apply here an earlier specification with GARCH-in-Mean gim_
+gim_garchfit <- ugarchfit(data = sp500ret["/2008-09"], spec = gim_garchspec)
 garchforecast2008 <- ugarchforecast(data = sp500ret["/2008-09"], fitORspec = gim_garchfit, n.ahead = 252)
 gim_garchfit <- ugarchfit(data = sp500ret["/2017-09"], spec = gim_garchspec)
-garchforecast2017 <- ugarchforecast(data = sp500ret["/2017-09"], fitORspec = gim_garchfit, n.ahead = 252)  
+garchforecast2017 <- ugarchforecast(data = sp500ret["/2017-09"], fitORspec = gim_garchfit, n.ahead = 252)
 
-#fitORspec = garchspec
-par(mfrow = c(2,1), mar = c(3,2,3,2))
+# fitORspec = garchspec
+par(mfrow = c(2, 1), mar = c(3, 2, 3, 2))
 plot(sigma(garchforecast2008), main = "/2008-09", type = "l")
 plot(sigma(garchforecast2017), main = "/2017-09", type = "l")
 ```
@@ -635,15 +675,17 @@ plot(sigma(garchforecast2017), main = "/2017-09", type = "l")
 # Simulations
 ```{r}
 # A code to simulate 5 time series of 10 years of daily returns
-spec = ugarchspec(variance.model = list(model="sGARCH", garchOrder=c(1,1)), 
-                  mean.model=list(armaOrder=c(0,0), include.mean=TRUE), 
-                  distribution.model="sstd", 
-                  fixed.pars = list(mu = 0.001,omega=0.00001, alpha1=0.05, beta1 =0.90, shape =8, skew=2))
+spec <- ugarchspec(
+     variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+     mean.model = list(armaOrder = c(0, 0), include.mean = TRUE),
+     distribution.model = "sstd",
+     fixed.pars = list(mu = 0.001, omega = 0.00001, alpha1 = 0.05, beta1 = 0.90, shape = 8, skew = 2)
+)
 
 # simulate the path
-#path.sgarch = ugarchpath(spec, n.sim=3000, n.start=1, m.sim=1)
+# path.sgarch = ugarchpath(spec, n.sim=3000, n.start=1, m.sim=1)
 
-simgarch <- ugarchpath(spec = spec, m.sim = 5, n.sim = 10*252, rseed = 210) 
+simgarch <- ugarchpath(spec = spec, m.sim = 5, n.sim = 10 * 252, rseed = 210)
 
 # Plot the simulated returns and volatility of the four series
 simret <- fitted(simgarch)
@@ -653,7 +695,6 @@ plot.zoo(sigma(simgarch))
 # Compute the corresponding simulated prices and plot them
 simprices <- exp(apply(simret, 2, "cumsum"))
 matplot(simprices, type = "l", lwd = 3)
-
 ```
 
 
@@ -666,7 +707,7 @@ coef(garchfit)
 likelihood(garchfit)
 
 # Set other starting values and re-estimate
-setstart(garchspec) <- list(alpha1 = 0.05, beta1 = 0.9, shape = 6) 
+setstart(garchspec) <- list(alpha1 = 0.05, beta1 = 0.9, shape = 6)
 garchfit <- ugarchfit(data = sp500ret, spec = garchspec)
 
 # Print the estimated parameters and the likelihood
@@ -676,7 +717,7 @@ likelihood(garchfit)
 
 #Covariance - with the dataset
 ```{r}
-# Compute the standardized returns, together with their correlation 
+# Compute the standardized returns, together with their correlation
 stdret_aparch <- residuals(aparchfit, standardize = TRUE)
 
 gim_garchfit <- ugarchfit(data = sp500ret, spec = gim_garchspec)
@@ -691,30 +732,30 @@ print(garchfit_gim_cor)
 -fit models
 -show correlations in the moving window
 
-```{r}
-# Compute the covariance and variance of the US and EU returns 
-msftwmtcov <- sigma(msftgarchfit) * sigma(wmtgarchfit) * msftwmtcor
-msftvar <- sigma(msftgarchfit)^2
-wmtvar <- sigma(wmtgarchfit)^2
+# ```{r}
+# # Compute the covariance and variance of the US and EU returns
+# msftwmtcov <- sigma(msftgarchfit) * sigma(wmtgarchfit) * msftwmtcor
+# msftvar <- sigma(msftgarchfit)^2
+# wmtvar <- sigma(wmtgarchfit)^2
 
-# Compute the minimum variance weight of the MSFT in the MSFT-WMT portfolio 
-portweight <- (wmtvar - msftwmtcov) / (msftvar + wmtvar - 2 * msftwmtcov)
-plot(portweight)
-```
+# # Compute the minimum variance weight of the MSFT in the MSFT-WMT portfolio
+# portweight <- (wmtvar - msftwmtcov) / (msftvar + wmtvar - 2 * msftwmtcov)
+# plot(portweight)
+# ```
 
 
 
-```{r}
-# Compute standardized returns
-stdmsftret <- residuals(msftgarchfit, standardize = TRUE)
+# ```{r}
+# # Compute standardized returns
+# stdmsftret <- residuals(msftgarchfit, standardize = TRUE)
 
-stdwmtret <- residuals(wmtgarchfit, standardize = TRUE)
+# stdwmtret <- residuals(wmtgarchfit, standardize = TRUE)
 
-# Print the correlation
-cor(stdmsftret, stdwmtret)
-# Load the package PerformanceAnalytics
-library(PerformanceAnalytics)
+# # Print the correlation
+# cor(stdmsftret, stdwmtret)
+# # Load the package PerformanceAnalytics
+# library(PerformanceAnalytics)
 
-# Plot the 3-month rolling correlation
-chart.RollingCorrelation(stdmsftret, stdwmtret, width = 66, main = "3-month rolling correlation between MSFT and WMT daily returns")
-```
+# # Plot the 3-month rolling correlation
+# chart.RollingCorrelation(stdmsftret, stdwmtret, width = 66, main = "3-month rolling correlation between MSFT and WMT daily returns")
+# ```
