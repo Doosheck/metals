@@ -1,2 +1,6 @@
 # macOS specific files
 .DS_Store
+
+# R files
+*.Rhistory
+*.RData
