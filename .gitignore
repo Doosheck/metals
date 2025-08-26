@@ -1,6 +1,30 @@
-# macOS specific files
-.DS_Store
+# Generated analysis outputs
+barb_experiments/output/
 
-# R files
-*.Rhistory
-*.RData
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local data summaries/backups
+~$*.xlsx
+*.bak
