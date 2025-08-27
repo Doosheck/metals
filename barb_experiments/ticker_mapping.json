@@ -1,27 +1,37 @@
 {
-  "Price_Lithium": "LILITM",
-  "Price_SouthAmericaLOB": "LISALB",
-  "Price_Lithium_Hydroxide": "LILIOH",
-  "Price_Lithium_Americas": "LILAMC",
-  "Price_EastAsia_Lithium_Carbonate": "LIEALC",
-  "Price_EastAsia_Lithium_Carbonate_Battery_Grade": "LIEABG",
-  "Price_LME_Lithium": "LILMEL",
-
-  "Price_Nickel": "NINIKL",
-  "Price_LME": "NILMEN",
-  "Price_ETF": "NIETFN",
-  "Price_SHFE": "NISHFN",
-  "Price_WUXI": "NIWUXI",
-  "Price_India": "NIINDA",
-
-  "Price_Cobalt": "COCOBL",
-  "Price_LME_All_Location_Stock": "COLMAS",
-  "Price_COMEX": "COCMXC",
-
-  "Price_Dailymetal": "CUDMET",
-  "Price_COMEX_Copper": "CUCMXC",
-  "Price_LME_3M": "CULME3",
-  "Price_SMM_Guixi": "CUSMMG",
-  "Price_SHFE": "CUSHFE",
-  "Price_ETF_Copper": "CUETFC"
+  "lithium": {
+    "Price_Lithium": "LILITM",
+    "Price_SouthAmericaLOB": "LISALB",
+    "Price_Lithium_Hydroxide": "LILIOH",
+    "Price_Lithium_Americas": "LILAMC",
+    "Price_EastAsia_Lithium_Carbonate": "LIEALC",
+    "Price_EastAsia_Lithium_Carbonate_Battery_Grade": "LIEABG",
+    "Price_LME_Lithium": "LILMEL",
+    "Price_DailyMetal": "LIDMXX",
+    "Price_COMEXLithiumHydroxide": "LICHXX",
+    "Price_LithiumAmericasCorp": "LILACX",
+    "Price_EastAsiaLithiumCarbonate": "LIEASA",
+    "Price_EastAsiaLithiumCarbonateBatteryGrade": "LI3375"
+  },
+  "nickel": {
+    "Price_Nickel": "NINIKL",
+    "Price_LME": "NILMEN",
+    "Price_ETF": "NIETFN",
+    "Price_SHFE": "NISHFN",
+    "Price_WUXI": "NIWUXI",
+    "Price_India": "NIINDA"
+  },
+  "cobalt": {
+    "Price_Cobalt": "COCOBL",
+    "Price_LME_All_Location_Stock": "COLMAS",
+    "Price_COMEX": "COCMXC"
+  },
+  "copper": {
+    "Price_Dailymetal": "CUDMET",
+    "Price_COMEX": "CUCMXC",
+    "Price_LME_3M": "CULME3",
+    "Price_SMM_Guixi": "CUSMMG",
+    "Price_SHFE": "CUSHFE",
+    "Price_ETF": "CUETFC"
+  }
 }
