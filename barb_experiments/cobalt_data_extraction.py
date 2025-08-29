@@ -26,20 +26,22 @@ def extract_cobalt_data():
     # Load Cobalt data source #2 - Cobalt COMEX 1M Future
     print("Loading COMEX cobalt futures data...")
     dfcu2 = pd.read_csv('data/reuters_data/COMEX (CMX) Cobalt Metal (Fastmarkets) Electronic Commodity Future Continuation 1.csv', sep=';')
-    dfcu2 = dfcu2.rename(columns={'Exchange Date': 'Date'})
-    dfcu2 = dfcu2.rename(columns={'Close': 'Price'})
+    dfcu2 = dfcu2.rename(columns={'Date': 'Date'})
+    dfcu2 = dfcu2.rename(columns={'Price': 'Price'})
     dfcu2['Date'] = pd.to_datetime(dfcu2['Date'], format='%d-%b-%Y')
-    dfcu2['Price'] = dfcu2['Price'].str.replace(',', '.').astype(float)
+    #dfcu2['Price'] = dfcu2['Price'].str.replace(',', '.').astype(float)
+    dfcu2['Price'] = dfcu2['Price'].astype(str).str.replace(',', '.').astype(float)
     dfcu2 = dfcu2.sort_values(by='Date')
     print(f"  COMEX: {dfcu2.shape[0]} rows, {dfcu2['Date'].min()} to {dfcu2['Date'].max()}")
     
      # Load Cobalt data source #3 - LME 3M Cobalt COEMX2
     print("Loading LME 3M cobalt data...")
-    dfcu3 = pd.read_csv('data/reuters_data/LME 3M Cobalt Composite Commodity Forward.csv', sep=';')
-    dfcu3 = dfcu3.rename(columns={'Exchange Date': 'Date'})
+    dfcu3 = pd.read_csv('data/reuters_data/LME 3 Month Cobalt Composite Commodity Forward.csv', sep=';')
+    dfcu3 = dfcu3.rename(columns={'Date': 'Date'})
     dfcu3 = dfcu3.rename(columns={'Close': 'Price'})
     dfcu3['Date'] = pd.to_datetime(dfcu3['Date'], format='%d-%b-%Y')
     dfcu3['Price'] = dfcu3['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    #fcu3['Price'] = dfcu3['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu3 = dfcu3.sort_values(by='Date')
     dfcu3 = dfcu3.iloc[:, :2]
     print(f"  LME 3M: {dfcu3.shape[0]} rows, {dfcu3['Date'].min()} to {dfcu3['Date'].max()}")
@@ -50,7 +52,8 @@ def extract_cobalt_data():
     dfcu4 = dfcu4.rename(columns={'Exchange Date': 'Date'})
     dfcu4 = dfcu4.rename(columns={'Close': 'Price'})
     dfcu4['Date'] = pd.to_datetime(dfcu4['Date'], format='%d-%b-%Y')
-    dfcu4['Price'] = dfcu4['Trade Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    #dfcu4['Price'] = dfcu4['Trade Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    dfcu4['Price'] = dfcu4['Trade Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu4 = dfcu4.drop(index=0)
     dfcu4 = dfcu4.sort_values(by='Date')
     dfcu4 = dfcu4.iloc[:, [0, -1]]
@@ -59,10 +62,11 @@ def extract_cobalt_data():
     # Load WUXI Metal Cobalt Bi-Monthly Future
     print("Loading WUXI Metal Cobalt Bi-Monthly Future data...")
     dfcu5 = pd.read_csv('data/reuters_data/WUXI Metal Cobalt Bi-Monthly Continuation 1.csv', sep=';')
-    dfcu5 = dfcu5.rename(columns={'Exchange Date': 'Date'})
-    dfcu5 = dfcu5.rename(columns={'Close': 'Price'})
+    dfcu5 = dfcu5.rename(columns={'Date': 'Date'})
+    dfcu5 = dfcu5.rename(columns={'Price': 'Price'})
     dfcu5['Date'] = pd.to_datetime(dfcu5['Date'], format='%d-%b-%Y')
-    dfcu5['Price'] = dfcu5['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    #dfcu5['Price'] = dfcu5['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    dfcu5['Price'] = dfcu5['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu5 = dfcu5.sort_values(by='Date')
     print(f"  SHFE: {dfcu5.shape[0]} rows, {dfcu5['Date'].min()} to {dfcu5['Date'].max()}")
     
@@ -245,7 +249,7 @@ def extract_cobalt_data():
     except Exception as e:
         print(f"Error creating plots: {e}")
     
-    print("\nCobalt data extraction completed successfully!")
+    #print("\nCobalt data extraction completed successfully!")
     
     return dfcu_merged
 
