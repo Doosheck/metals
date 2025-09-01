@@ -80,7 +80,7 @@ def extract_copper_data():
     print("\nMerging all copper data sources...")
     
     # Merge all dataframes on the 'Date' column
-    dfcu_merged = pd.merge(dfcu1, dfcu2, on='Date', suffixes=('_Dailymetal', '_COMEX'))
+    dfcu_merged = pd.merge(dfcu1, dfcu2, on='Date', suffixes=('_Dailymetal', '_COMEX'), how='outer')
     dfcu_merged = pd.merge(dfcu_merged, dfcu3[['Date', 'Price']], on='Date', how='outer')
     dfcu_merged = dfcu_merged.rename(columns={'Price': 'Price_LME_3M'})
     dfcu_merged = pd.merge(dfcu_merged, dfcu4[['Date', 'Price']], on='Date', how='outer')
