@@ -115,7 +115,8 @@ def extract_lithium_data():
         n = len(ticker_columns)
         rows = 2
         cols = max(3, (n + rows - 1) // rows)
-        fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4.5 * rows))
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        #fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4.5 * rows))
         fig.suptitle('Lithium', fontsize=20, fontweight='bold')
 
         if hasattr(axes, 'flatten'):
@@ -124,7 +125,7 @@ def extract_lithium_data():
             axes = [axes]
 
         colors = [
-            '#6A5ACD', '#2E8B57', '#8B0000', '#20B2AA', '#8A2BE2', '#B8860B', '#2F4F4F'
+            '#4682B4', '#708090', '#2F4F4F', '#36454F', '#1C1C1C', '#B8860B'
         ]
         while len(colors) < n:
             colors.extend(colors)

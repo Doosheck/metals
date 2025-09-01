@@ -32,33 +32,34 @@ def extract_cobalt_data():
     #dfcu2['Price'] = dfcu2['Price'].str.replace(',', '.').astype(float)
     dfcu2['Price'] = dfcu2['Price'].astype(str).str.replace(',', '.').astype(float)
     dfcu2 = dfcu2.sort_values(by='Date')
+    dfcu2 = dfcu2.iloc[:, :2]
     print(f"  COMEX: {dfcu2.shape[0]} rows, {dfcu2['Date'].min()} to {dfcu2['Date'].max()}")
     
      # Load Cobalt data source #3 - LME 3M Cobalt COEMX2
     print("Loading LME 3M cobalt data...")
-    dfcu3 = pd.read_csv('data/reuters_data/LME 3 Month Cobalt Composite Commodity Forward.csv', sep=';')
+    dfcu3 = pd.read_csv('data/reuters_data/LME 3 Month Cobalt Composite Commodity Forward2.csv', sep=';')
     dfcu3 = dfcu3.rename(columns={'Date': 'Date'})
     dfcu3 = dfcu3.rename(columns={'Close': 'Price'})
     dfcu3['Date'] = pd.to_datetime(dfcu3['Date'], format='%d-%b-%Y')
     #dfcu3['Price'] = dfcu3['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu3['Price'] = dfcu3['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
-    dfcu3['Price'] = pd.to_numeric(price_series, errors='coerce')
+    #dfcu3['Price'] = pd.to_numeric(Price, errors='coerce')
     dfcu3 = dfcu3.sort_values(by='Date')
     dfcu3 = dfcu3.iloc[:, :2]
     print(f"  LME 3M: {dfcu3.shape[0]} rows, {dfcu3['Date'].min()} to {dfcu3['Date'].max()}")
     
     # Load LME All Location Cobalt Total Stock Commodity Statistics
     print("Loading LME All Location Cobalt Total Stock Commodity Statistics...")
-    dfcu4 = pd.read_csv('data/reuters_data/LME All Location Cobalt Total Stock Commodity Statistics Contract .csv', sep=';')
-    dfcu4 = dfcu4.rename(columns={'Exchange Date': 'Date'})
+    dfcu4 = pd.read_csv('data/reuters_data/LME All Location Cobalt Total Stock Commodity Statistics Contract2.csv', sep=';')
+    dfcu4 = dfcu4.rename(columns={'Date': 'Date'})
     dfcu4 = dfcu4.rename(columns={'Close': 'Price'})
     dfcu4['Date'] = pd.to_datetime(dfcu4['Date'], format='%d-%b-%Y')
     #dfcu4['Price'] = dfcu4['Trade Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
-    dfcu4['Price'] = dfcu4['Trade Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    dfcu4['Price'] = dfcu4['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu4 = dfcu4.drop(index=0)
     dfcu4 = dfcu4.sort_values(by='Date')
-    dfcu4 = dfcu4.iloc[:, [0, -1]]
-    print(f"  SMM Guixi: {dfcu4.shape[0]} rows, {dfcu4['Date'].min()} to {dfcu4['Date'].max()}")
+    dfcu4 = dfcu4.iloc[:, :2]
+    print(f"  LME All Location Cobalt: {dfcu4.shape[0]} rows, {dfcu4['Date'].min()} to {dfcu4['Date'].max()}")
     
     # Load WUXI Metal Cobalt Bi-Monthly Future
     print("Loading WUXI Metal Cobalt Bi-Monthly Future data...")
@@ -69,7 +70,7 @@ def extract_cobalt_data():
     #dfcu5['Price'] = dfcu5['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu5['Price'] = dfcu5['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
     dfcu5 = dfcu5.sort_values(by='Date')
-    print(f"  SHFE: {dfcu5.shape[0]} rows, {dfcu5['Date'].min()} to {dfcu5['Date'].max()}")
+    print(f"  WUXI: {dfcu5.shape[0]} rows, {dfcu5['Date'].min()} to {dfcu5['Date'].max()}")
     
      
     print("\nMerging all cobalt data sources...")
