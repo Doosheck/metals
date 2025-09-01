@@ -40,8 +40,9 @@ def extract_cobalt_data():
     dfcu3 = dfcu3.rename(columns={'Date': 'Date'})
     dfcu3 = dfcu3.rename(columns={'Close': 'Price'})
     dfcu3['Date'] = pd.to_datetime(dfcu3['Date'], format='%d-%b-%Y')
-    dfcu3['Price'] = dfcu3['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
-    #fcu3['Price'] = dfcu3['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    #dfcu3['Price'] = dfcu3['Price'].str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    dfcu3['Price'] = dfcu3['Price'].astype(str).str.replace('\xa0', '').str.replace(',', '.').astype(float)
+    dfcu3['Price'] = pd.to_numeric(price_series, errors='coerce')
     dfcu3 = dfcu3.sort_values(by='Date')
     dfcu3 = dfcu3.iloc[:, :2]
     print(f"  LME 3M: {dfcu3.shape[0]} rows, {dfcu3['Date'].min()} to {dfcu3['Date'].max()}")
