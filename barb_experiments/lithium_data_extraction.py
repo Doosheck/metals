@@ -18,8 +18,8 @@ def extract_lithium_data():
     # Date, Price_DailyMetal, Price_SouthAmericaLOB, Price_COMEXLithiumHydroxide,
     # Price_LithiumAmericasCorp, Price_EastAsiaLithiumCarbonate,
     # Price_EastAsiaLithiumCarbonateBatteryGrade
-    print("Loading consolidated lithium data (ALL_lithium_prices_final.csv)...")
-    dfl = pd.read_csv('data/ALL_lithium_prices_final.csv')
+    print("Loading consolidated lithium data (ALL_lithium_prices_outer.csv)...")
+    dfl = pd.read_csv('data/ALL_lithium_prices_outer.csv')
     dfl['Date'] = pd.to_datetime(dfl['Date'])
 
     # Keep only the columns we care about and rename for consistency with copper script
