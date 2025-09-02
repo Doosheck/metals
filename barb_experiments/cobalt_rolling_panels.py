@@ -15,8 +15,8 @@ from typing import List, Tuple
 
 def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
     """Load CSV and prepare data for correlation analysis."""
-    df = pd.read_csv("barb_experiments/barb_data/cobalt_prices_tickers.csv")
-    
+    #df = pd.read_csv("barb_experiments/barb_data/cobalt_prices_tickers.csv")
+    df = pd.read_csv("barb_experiments/data/ALL_cobalt_prices_interpolated.csv")
     if 'Date' not in df.columns:
         raise ValueError(f"Expected a 'Date' column in {csv_path}")
     
