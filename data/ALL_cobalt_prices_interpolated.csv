@@ -1,4 +1,4 @@
-Date,Price_Cobalt,Price_LME,Price_LME_All_Location_Stock,Price_WUXI,Price_COMEX
+Date,Price_DailyMetal,Price_LME,Price_LME_All_Location_Stock,Price_WUXI,Price_COMEX
 2016-12-30,,32734.0,,,
 2017-01-02,14.855,32734.5,,,
 2017-01-03,14.742,32735.0,691.0,83.6,
