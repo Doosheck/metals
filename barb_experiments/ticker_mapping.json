@@ -2,7 +2,7 @@
   "lithium": {
     "Price_DailyMetal": "LIDALY",
     "Price_SouthAmericaLOB": "LISAME",
-    "Price_COMEX_Lithium_Hydroxide": "LICHXX",
+    "Price_COMEX_Lithium_Hydroxide": "LICOMX",
     "Price_Lithium_Americas": "LILAMC",
     "Price_EastAsia_Lithium_Carbonate": "LIEALC",
     "Price_EastAsia_Lithium_Carbonate_Battery_Grade": "LIEABG",
