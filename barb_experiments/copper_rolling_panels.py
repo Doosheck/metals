@@ -33,7 +33,7 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
     ticker_mapping = {
-        'Price_DailyMetal': 'CUDALY',      # Daily Metal Cobalt prices
+        'Price_Dailymetal': 'CUDALY',      # Daily Metal Cobalt prices
         'Price_COMEX': 'CUCOMX',
         'Price_LME_3M': 'CULMEX',
         'Price_SMM_Guixi': 'CUSMMG',           # LME 3M Cobalt
