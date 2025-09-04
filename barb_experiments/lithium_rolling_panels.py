@@ -37,6 +37,7 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
             "Price_COMEXLithiumHydroxide": "LICOMX",
             "Price_LithiumAmericasCorp": "LILAMC",
             "Price_EastAsiaLithiumCarbonate": "LIEALC",
+            "Price_EastAsiaLithiumCarbonateBatteryGrade": "LIEABG",
             "Price_LithiumLME": "LILMEX"
         }
     # Apply the mapping to rename columns
@@ -51,6 +52,11 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
     unmapped_cols = [col for col in df.columns if col != 'Date' and col not in ticker_mapping.values()]
     if unmapped_cols:
         print(f"Warning: Unmapped columns found: {unmapped_cols}")
+
+    # Remove LIEABG column if it exists
+    if 'LIEABG' in df.columns:
+        df = df.drop('LIEABG', axis=1)
+        
     return df
 
 
