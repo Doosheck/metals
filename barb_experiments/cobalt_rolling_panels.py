@@ -107,8 +107,8 @@ def plot_rolling_correlations(returns: pd.DataFrame, pairs: List[Tuple[str, str,
     nrows = int(np.ceil(n_pairs / ncols))
     
     # Set up colors
-    palette = sns.color_palette('tab10', n_colors=max(3, len(windows)))
-    #palette = sns.color_palette(['#191970', '#006400'], n_colors=max(3, len(windows)))
+    #palette = sns.color_palette('tab10', n_colors=max(3, len(windows)))
+    palette = sns.color_palette(['#191970', '#006400'], n_colors=max(3, len(windows)))
     sns.set_style('whitegrid')
     
     # Create subplots

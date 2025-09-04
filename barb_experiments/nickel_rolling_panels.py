@@ -13,7 +13,8 @@ from typing import List, Tuple
 
 def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
     """Load CSV and prepare data for correlation analysis."""
-    df = pd.read_csv("barb_experiments/barb_data/nickel_prices_tickers.csv")
+    #df = pd.read_csv("barb_experiments/barb_data/nickel_prices_tickers.csv")
+    df = pd.read_csv("data/ALL_nickel_prices_interpolated.csv")
     
     if 'Date' not in df.columns:
         raise ValueError(f"Expected a 'Date' column in {csv_path}")
@@ -29,6 +30,26 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
         if not pd.api.types.is_numeric_dtype(df[col]):
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
+    ticker_mapping = {
+        'Price_DailyMetal': 'NIDALY',
+        'Price_LME': 'NILMEX',
+        'Price_ETF': 'NIETFN',
+        'Price_SHFE': 'NISHFE',
+        'Price_WUXI': 'NIWUXI',
+        'Price_India': 'NIINDA'
+    }
+    # Apply the mapping to rename columns
+    df = df.rename(columns=ticker_mapping)
+    
+    # Optional: Print which columns were renamed for debugging
+    renamed_cols = [old for old in ticker_mapping.keys() if old in df.columns]
+    if renamed_cols:
+        print(f"Renamed columns: {renamed_cols}")
+    
+    # Optional: Check for unmapped columns (excluding Date)
+    unmapped_cols = [col for col in df.columns if col != 'Date' and col not in ticker_mapping.values()]
+    if unmapped_cols:
+        print(f"Warning: Unmapped columns found: {unmapped_cols}")
     return df
 
 
@@ -71,7 +92,7 @@ def get_top_correlated_pairs(returns: pd.DataFrame, top_n: int = 6) -> List[Tupl
 
 
 def plot_rolling_correlations(returns: pd.DataFrame, pairs: List[Tuple[str, str, float]], 
-                            windows: List[int] = [20, 60], output_path: str = None, 
+                            windows: List[int] = [30, 60], output_path: str = None, 
                             ncols: int = 2) -> None:
     """Plot rolling correlations for top pairs."""
     
@@ -83,7 +104,8 @@ def plot_rolling_correlations(returns: pd.DataFrame, pairs: List[Tuple[str, str,
     nrows = int(np.ceil(n_pairs / ncols))
     
     # Set up colors
-    palette = sns.color_palette('tab10', n_colors=max(3, len(windows)))
+    #palette = sns.color_palette('tab10', n_colors=max(3, len(windows)))
+    palette = sns.color_palette(['#191970', '#006400'], n_colors=max(3, len(windows)))
     sns.set_style('whitegrid')
     
     # Create subplots
@@ -169,8 +191,8 @@ def analyze_csv_correlations(csv_path: str, windows: List[int] = [30, 60],
 # Example usage
 if __name__ == "__main__":
     # Example parameters - modify these for your use case
-    csv_file = "barb_experiments/barb_data/nickel_prices_tickers.csv"  # Replace with your CSV path
-    rolling_windows = [20, 60]  # Rolling window sizes in days
+    csv_file = "data/ALL_nickel_prices_interpolated.csv"  # Replace with your CSV path
+    rolling_windows = [30, 60]  # Rolling window sizes in days
     top_pairs = 6  # Number of top correlated pairs to plot
     columns_per_row = 2  # Number of columns in subplot grid
     
