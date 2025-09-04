@@ -295,6 +295,7 @@ def create_synchronized_missing_value_plot(df, output_dir):
         ticker_mapping = {
             "Price_DailyMetal": "CODALY",
             "Price_LME": "COLMEX",
+            "Price_LME_3M": "COLME3",
             "Price_LME_All_Location_Stock": "COLMEA",
             "Price_WUXI": "COWUXI",
             "Price_COMEX": "COCOMX"
@@ -360,8 +361,8 @@ def create_synchronized_missing_value_plot(df, output_dir):
                            fontsize=11, fontweight='bold')
                 
                 # Add legend if there are missing values
-                if len(missing_in_range) > 0:
-                    ax.legend(fontsize=8, loc='upper right')
+                # if len(missing_in_range) > 0:
+                #     ax.legend(fontsize=8, loc='upper right')
                     
             else:
                 ax.text(0.5, 0.5, 'No Data Available', 
@@ -417,6 +418,7 @@ def extract_cobalt_data():
         csv_to_json_mapping = {
             "Price_DailyMetal": "Price_DailyMetal",
             "Price_LME_CO": "Price_LME_CO",
+            "Price_LME3M_CO": "Price_LME_3M",
             "Price_LME_CO_All": "Price_LME_CO_All",
             "Price_WUXI": "Price_WUXI",
             "Price_COMEX": "Price_COMEX"
@@ -436,6 +438,7 @@ def extract_cobalt_data():
         cobalt_ticker_mapping = {
             "Price_DailyMetal": "CODALY",
             "Price_LME": "COLMEX",
+            "Price_LME_3M": "COLME3",
             "Price_LME_All_Location_Stock": "COLMEA",
             "Price_WUXI": "COWUXI",
             "Price_COMEX": "COCOMX"
@@ -445,6 +448,7 @@ def extract_cobalt_data():
         cobalt_ticker_mapping = {
             "Price_DailyMetal": "CODALY",
             "Price_LME": "COLMEX",
+            "Price_LME_3M": "COLME3",
             "Price_LME_All_Location_Stock": "COLMEA",
             "Price_WUXI": "COWUXI",
             "Price_COMEX": "COCOMX"

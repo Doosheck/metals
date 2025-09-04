@@ -295,7 +295,7 @@ def create_synchronized_missing_value_plot(df, output_dir):
         ticker_mapping = {
             "Price_DailyMetal": "LIDALY",
             "Price_SouthAmericaLOB": "LISAME",
-            "Price_COMEXLithiumHydroxide": "LICHXX",
+            "Price_COMEXLithiumHydroxide": "LICOMX",
             "Price_LithiumAmericasCorp": "LILAMC",
             "Price_EastAsiaLithiumCarbonate": "LIEALC",
             "Price_LithiumLME": "LILMEX"
@@ -363,8 +363,8 @@ def create_synchronized_missing_value_plot(df, output_dir):
                            fontsize=11, fontweight='bold')
                 
                 # Add legend if there are missing values
-                if len(missing_in_range) > 0:
-                    ax.legend(fontsize=8, loc='upper left')
+                # if len(missing_in_range) > 0:
+                #     ax.legend(fontsize=8, loc='upper left')
                     
             else:
                 ax.text(0.5, 0.5, 'No Data Available', 

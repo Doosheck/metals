@@ -19,6 +19,7 @@
   "cobalt": {
     "Price_DailyMetal": "CODALY",
     "Price_LME": "COLMEX",
+    "Price_LME_3M": "COLME3",
     "Price_LME_All_Location_Stock": "COLMEA",
     "Price_WUXI": "COWUXI",
     "Price_COMEX": "COCOMX"
