@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compute rolling correlation windows for cobalt time series from cobalt_prices_tickers.csv.
+Compute rolling correlation windows for cobalt time series from ALL_cobalt_prices_interpolated.csv.
 This script analyzes rolling correlations between different cobalt price series.
 """
 
@@ -16,7 +16,7 @@ from typing import List, Tuple
 def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
     """Load CSV and prepare data for correlation analysis."""
     #df = pd.read_csv("barb_experiments/barb_data/cobalt_prices_tickers.csv")
-    df = pd.read_csv("barb_experiments/data/ALL_cobalt_prices_interpolated.csv")
+    df = pd.read_csv("data/ALL_cobalt_prices_interpolated.csv")
     if 'Date' not in df.columns:
         raise ValueError(f"Expected a 'Date' column in {csv_path}")
     
@@ -30,7 +30,29 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
             continue
         if not pd.api.types.is_numeric_dtype(df[col]):
             df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Change tickers
+    ticker_mapping = {
+        'Price_DailyMetal': 'CODALY',      # Daily Metal Cobalt prices
+        'Price_LME': 'COLMEX',
+        'Price_LME_3M': 'COLMEF',
+        'Price_LME_All_Location_Stock': 'COLMEA',           # LME 3M Cobalt
+        'Price_WUXI': 'COWUXI',            # WUXI Cobalt futures
+        'Price_COMEX': 'COCOMX'              # COMEX Cobalt Metal (Fastmarkets) Electronic Commodity 
+    }
+    # Apply the mapping to rename columns
+    df = df.rename(columns=ticker_mapping)
     
+    # Optional: Print which columns were renamed for debugging
+    renamed_cols = [old for old in ticker_mapping.keys() if old in df.columns]
+    if renamed_cols:
+        print(f"Renamed columns: {renamed_cols}")
+    
+    # Optional: Check for unmapped columns (excluding Date)
+    unmapped_cols = [col for col in df.columns if col != 'Date' and col not in ticker_mapping.values()]
+    if unmapped_cols:
+        print(f"Warning: Unmapped columns found: {unmapped_cols}")
+
     return df
 
 
@@ -73,7 +95,7 @@ def get_top_correlated_pairs(returns: pd.DataFrame, top_n: int = 6) -> List[Tupl
 
 
 def plot_rolling_correlations(returns: pd.DataFrame, pairs: List[Tuple[str, str, float]], 
-                            windows: List[int] = [20, 60], output_path: str = None, 
+                            windows: List[int] = [30, 60], output_path: str = None, 
                             ncols: int = 2) -> None:
     """Plot rolling correlations for top pairs."""
     
@@ -86,6 +108,7 @@ def plot_rolling_correlations(returns: pd.DataFrame, pairs: List[Tuple[str, str,
     
     # Set up colors
     palette = sns.color_palette('tab10', n_colors=max(3, len(windows)))
+    #palette = sns.color_palette(['#191970', '#006400'], n_colors=max(3, len(windows)))
     sns.set_style('whitegrid')
     
     # Create subplots
@@ -171,8 +194,9 @@ def analyze_csv_correlations(csv_path: str, windows: List[int] = [30, 60],
 # Example usage
 if __name__ == "__main__":
     # Example parameters - modify these for your use case
-    csv_file = "barb_experiments/barb_data/cobalt_prices_tickers.csv"  # Cobalt CSV path
-    rolling_windows = [20, 60]  # Rolling window sizes in days
+    #csv_file = "barb_experiments/barb_data/cobalt_prices_tickers.csv"  # Cobalt CSV path
+    csv_file = "data/ALL_cobalt_prices_interpolated.csv"  # Cobalt CSV path
+    rolling_windows = [30, 60]  # Rolling window sizes in days
     top_pairs = 6  # Number of top correlated pairs to plot
     columns_per_row = 2  # Number of columns in subplot grid
     
