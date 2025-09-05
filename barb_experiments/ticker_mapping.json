@@ -2,11 +2,11 @@
   "lithium": {
     "Price_DailyMetal": "LIDALY",
     "Price_SouthAmericaLOB": "LISAME",
-    "Price_COMEX_Lithium_Hydroxide": "LICOMX",
-    "Price_Lithium_Americas": "LILAMC",
-    "Price_EastAsia_Lithium_Carbonate": "LIEALC",
-    "Price_EastAsia_Lithium_Carbonate_Battery_Grade": "LIEABG",
-    "Price_LME_Lithium": "LILMEX"
+    "Price_COMEXLithiumHydroxide": "LICOMX",
+    "Price_LithiumAmericasCorp": "LILAMC",
+    "Price_EastAsiaLithiumCarbonate": "LIEALC",
+    "Price_EastAsiaLithiumCarbonateBatteryGrade": "LIEABG",
+    "Price_LithiumLME": "LILMEX"
   },
   "nickel": {
     "Price_DailyMetal": "NIDALY",

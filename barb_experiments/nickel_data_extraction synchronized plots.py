@@ -293,7 +293,7 @@ def create_synchronized_missing_value_plot(df, output_dir):
         
         # Define the ticker mapping for labels
         ticker_mapping = {
-            "Price_Dailymetal": "NIDALY",
+            "Price_DailyMetal": "NIDALY",
             "Price_LME": "NILMEX",
             "Price_ETF": "NIETFN",
             "Price_SHFE": "NISHFE",
@@ -416,7 +416,7 @@ def extract_nickel_data():
         
         # Map JSON keys to actual CSV column names
         csv_to_json_mapping = {
-            "Price_Dailymetal": "Price_DailyMetal",
+            "Price_DailyMetal": "Price_DailyMetal",
             "Price_LME_NI": "Price_LME_NI",
             "Price_LME_NI_All": "Price_LME_NI_All",
             "Price_WUXI": "Price_WUXI",
@@ -436,7 +436,7 @@ def extract_nickel_data():
     except FileNotFoundError:
         print("Warning: ticker_mapping.json not found. Using fallback mapping.")
         nickel_ticker_mapping = {
-            "Price_Dailymetal": "NIDALY",
+            "Price_DailyMetal": "NIDALY",
             "Price_LME": "NILMEX",
             "Price_ETF": "NIETFN",
             "Price_SHFE": "NISHFE",
@@ -446,7 +446,7 @@ def extract_nickel_data():
     except Exception as e:
         print(f"Error loading ticker mapping: {e}. Using fallback mapping.")
         nickel_ticker_mapping = {
-            "Price_Dailymetal": "NIDALY",
+            "Price_DailyMetal": "NIDALY",
             "Price_LME": "NILMEX",
             "Price_ETF": "NIETFN",
             "Price_SHFE": "NISHFE",
