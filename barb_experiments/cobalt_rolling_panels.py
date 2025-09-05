@@ -35,7 +35,7 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
     ticker_mapping = {
         'Price_DailyMetal': 'CODALY',      # Daily Metal Cobalt prices
         'Price_LME': 'COLMEX',
-        'Price_LME_3M': 'COLMEF',
+        'Price_LME_3M': 'COLME3',
         'Price_LME_All_Location_Stock': 'COLMEA',           # LME 3M Cobalt
         'Price_WUXI': 'COWUXI',            # WUXI Cobalt futures
         'Price_COMEX': 'COCOMX'              # COMEX Cobalt Metal (Fastmarkets) Electronic Commodity 
