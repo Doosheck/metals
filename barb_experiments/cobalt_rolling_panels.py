@@ -53,6 +53,18 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
     if unmapped_cols:
         print(f"Warning: Unmapped columns found: {unmapped_cols}")
 
+    
+
+    #merge z copper zeby usunac braki w datach
+    dfcu = pd.read_csv("data/ALL_copper_prices_interpolated.csv")
+    df['Date'] = pd.to_datetime(df['Date'])
+    dfcu['Date'] = pd.to_datetime(dfcu['Date'])
+    df_expanded = pd.merge(df, dfcu[['Date']], on='Date', how='outer', sort=True)
+    print(f"Wymiary oryginalnego df (wiersze, kolumny): {df.shape}")
+    print(f"Wymiary df_expanded (wiersze, kolumny): {df_expanded.shape}")
+    df = df_expanded.interpolate(method='linear')# , limit_direction='both', limit_area='inside')
+    #koniec merge
+
     return df
 
 
@@ -64,11 +76,14 @@ def compute_returns(df: pd.DataFrame) -> pd.DataFrame:
     returns = df[['Date'] + numeric_cols].copy()
     
     # Calculate percentage changes
-    for col in numeric_cols:
-        returns[col] = returns[col].pct_change()
-    
+    #for col in numeric_cols:
+        #returns[col] = returns[col].pct_change()
+    # Zamiast pętli, możemy to zrobić wydajniej na całej ramce danych
+    returns[numeric_cols] = returns[numeric_cols].pct_change()
+
     # Drop NaN values (first row will be NaN after pct_change)
-    returns = returns.dropna().reset_index(drop=True)
+    #returns = returns.dropna().reset_index(drop=True)
+    returns = returns.iloc[1:].reset_index(drop=True)
     
     return returns
 
@@ -166,6 +181,11 @@ def analyze_csv_correlations(csv_path: str, windows: List[int] = [30, 60],
     df = load_and_prepare_data(csv_path)
     print(f"Data shape: {df.shape}")
     print(f"Columns: {list(df.columns)}")
+    
+    # ZAPISZ PRZYGOTOWANY DATAFRAME DO NOWEGO PLIKU
+    prepared_data_path = "data/ALL_cobalt_prices_PREPARED.csv"
+    df.to_csv(prepared_data_path, index=False)
+    print(f"Prepared data saved to: {prepared_data_path}")
     
     # Compute returns
     returns = compute_returns(df)

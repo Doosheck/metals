@@ -54,7 +54,7 @@ def load_and_prepare_data(csv_path: str) -> pd.DataFrame:
         print(f"Warning: Unmapped columns found: {unmapped_cols}")
 
     return df
-
+    
 
 def compute_returns(df: pd.DataFrame) -> pd.DataFrame:
     """Compute returns for all numeric columns."""
