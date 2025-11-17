@@ -11,12 +11,12 @@ data = {}
 for material in MATERIALS:
     data[material] = {
         'outer': pd.read_csv(f'data/ALL_{material}_prices_outer.csv'),
-        'kalman': pd.read_csv(f'data/ALL_{material}_prices_kalman.csv'),
-        'spline': pd.read_csv(f'data/ALL_{material}_prices_cubic_spline.csv')
+        'spline': pd.read_csv(f'data/ALL_{material}_prices_cubic_spline.csv'),
+        'linear': pd.read_csv(f'data/ALL_{material}_prices_interpolated.csv')
     }
     
     # Convert Date column to datetime
-    for method in ['outer', 'kalman', 'spline']:
+    for method in ['outer', 'spline', 'linear']:
         data[material][method]['Date'] = pd.to_datetime(data[material][method]['Date'])
 
 # Get variable names for each material (all columns except Date)
@@ -26,122 +26,77 @@ for material in MATERIALS:
     print(f"{material.capitalize()}: {len(variables[material])} variables - {variables[material]}")
 
 
-def approach_1_side_by_side(material):
+def find_differences(material, tolerance=1e-9):
     """
-    Approach 1: Side-by-Side Subplots
-    Each variable gets its own subplot showing all three interpolation methods overlaid.
+    Find observations where interpolation methods produce different results.
+    Returns a merged dataframe with only rows where methods differ.
     """
-    vars_list = variables[material]
-    n_vars = len(vars_list)
-    fig, axes = plt.subplots(n_vars, 1, figsize=(14, 4*n_vars))
+    # Merge all dataframes on Date with explicit suffixes
+    merged = data[material]['outer'].merge(
+        data[material]['spline'], on='Date', suffixes=('_outer', '_spline')
+    )
+    merged = merged.merge(
+        data[material]['linear'], on='Date'
+    )
     
-    if n_vars == 1:
-        axes = [axes]
+    # Rename linear columns to add _linear suffix
+    for var in variables[material]:
+        if var in merged.columns:
+            merged.rename(columns={var: f'{var}_linear'}, inplace=True)
     
-    fig.suptitle(f'Approach 1: {material.capitalize()} - Side-by-Side Comparison of Interpolation Methods', 
-                 fontsize=16, fontweight='bold', y=0.995)
-    
-    for idx, var in enumerate(vars_list):
-        ax = axes[idx]
-        
-        # Plot all three methods
-        ax.plot(data[material]['outer']['Date'], data[material]['outer'][var], 
-                label='Outer Join', linewidth=2, alpha=0.8, color='#1f77b4')
-        ax.plot(data[material]['kalman']['Date'], data[material]['kalman'][var], 
-                label='Kalman Filter', linewidth=2, alpha=0.8, color='#2ca02c')
-        ax.plot(data[material]['spline']['Date'], data[material]['spline'][var], 
-                label='Cubic Spline', linewidth=2, alpha=0.8, color='#ff7f0e')
-        
-        ax.set_title(var, fontsize=12, fontweight='bold')
-        ax.set_xlabel('Date', fontsize=10)
-        ax.set_ylabel('Value', fontsize=10)
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
-        ax.tick_params(axis='x', rotation=45)
-    
-    plt.tight_layout()
-    filename = f'approach1_side_by_side_{material}.png'
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved: {filename}")
-
-
-def approach_2_differences(material):
-    """
-    Approach 2: Difference Highlighting
-    Shows the absolute differences between interpolation methods over time.
-    """
-    vars_list = variables[material]
-    n_vars = len(vars_list)
-    fig, axes = plt.subplots(n_vars, 1, figsize=(14, 4*n_vars))
-    
-    if n_vars == 1:
-        axes = [axes]
-    
-    fig.suptitle(f'Approach 2: {material.capitalize()} - Absolute Differences Between Interpolation Methods', 
-                 fontsize=16, fontweight='bold', y=0.995)
-    
-    # Merge dataframes on Date
-    merged = data[material]['outer'].merge(data[material]['kalman'], on='Date', suffixes=('_outer', '_kalman'))
-    merged = merged.merge(data[material]['spline'], on='Date')
-    
-    for idx, var in enumerate(vars_list):
-        ax = axes[idx]
-        
-        # Calculate absolute differences
-        diff_kalman_outer = np.abs(merged[f'{var}_kalman'] - merged[f'{var}_outer'])
-        diff_spline_outer = np.abs(merged[var] - merged[f'{var}_outer'])
-        diff_kalman_spline = np.abs(merged[f'{var}_kalman'] - merged[var])
-        
-        # Plot differences
-        ax.plot(merged['Date'], diff_kalman_outer, label='Kalman vs Outer', 
-                linewidth=2, alpha=0.8, color='#9467bd')
-        ax.plot(merged['Date'], diff_spline_outer, label='Spline vs Outer', 
-                linewidth=2, alpha=0.8, color='#d62728')
-        ax.plot(merged['Date'], diff_kalman_spline, label='Kalman vs Spline', 
-                linewidth=2, alpha=0.8, color='#17becf')
-        
-        ax.set_title(f'{var} - Method Differences', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Date', fontsize=10)
-        ax.set_ylabel('Absolute Difference', fontsize=10)
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
-        ax.tick_params(axis='x', rotation=45)
-    
-    plt.tight_layout()
-    filename = f'approach2_differences_{material}.png'
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved: {filename}")
-
-
-def approach_3_scatter_matrix(material):
-    """
-    Approach 3: Scatter Matrix Comparison
-    Direct method-vs-method scatter plots show correlation and deviation patterns.
-    """
-    # Merge dataframes on Date
-    merged = data[material]['outer'].merge(data[material]['kalman'], on='Date', suffixes=('_outer', '_kalman'))
-    merged = merged.merge(data[material]['spline'], on='Date')
+    # Find rows where methods differ for any variable
+    diff_mask = pd.Series([False] * len(merged))
     
     for var in variables[material]:
-        fig = plt.figure(figsize=(16, 10))
-        fig.suptitle(f'Approach 3: {material.capitalize()} - Scatter Matrix for {var}', 
+        # Check if methods differ
+        outer_col = f'{var}_outer'
+        spline_col = f'{var}_spline'
+        linear_col = f'{var}_linear'
+        
+        # Compare linear and spline to outer (reference)
+        diff_outer_spline = ~np.isclose(merged[outer_col], merged[spline_col], rtol=tolerance, atol=tolerance)
+        diff_outer_linear = ~np.isclose(merged[outer_col], merged[linear_col], rtol=tolerance, atol=tolerance)
+        diff_spline_linear = ~np.isclose(merged[spline_col], merged[linear_col], rtol=tolerance, atol=tolerance)
+        
+        # Any difference means this row should be included
+        var_diff = diff_outer_spline | diff_outer_linear | diff_spline_linear
+        diff_mask = diff_mask | var_diff
+    
+    # Filter to only different observations
+    diff_data = merged[diff_mask].copy()
+    
+    return diff_data
+
+
+def approach_3_scatter_matrix_differences(material, diff_data):
+    """
+    Approach 3: Scatter Matrix Comparison - Only for observations with differences
+    """
+    if len(diff_data) == 0:
+        print(f"No differences found for {material}")
+        return
+    
+    for var in variables[material]:
+        fig = plt.figure(figsize=(20, 12))
+        fig.suptitle(f'{material.capitalize()} - Scatter Matrix for {var} (Only Different Observations)\n'
+                     f'n = {len(diff_data)} observations with differences', 
                      fontsize=16, fontweight='bold')
         
-        # Create 2x2 grid: 3 scatter plots + 1 time series
-        gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+        # Create 3x2 grid: 6 scatter plots
+        gs = fig.add_gridspec(3, 2, hspace=0.35, wspace=0.3)
+        
+        outer_col = f'{var}_outer'
+        kalman_col = f'{var}_kalman'
+        spline_col = f'{var}_spline'
+        linear_col = f'{var}_linear'
         
         # Scatter 1: Kalman vs Outer
         ax1 = fig.add_subplot(gs[0, 0])
-        ax1.scatter(merged[f'{var}_outer'], merged[f'{var}_kalman'], 
-                   alpha=0.6, s=30, color='#2ca02c', edgecolors='black', linewidth=0.5)
-        
-        # Add diagonal line
-        min_val = min(merged[f'{var}_outer'].min(), merged[f'{var}_kalman'].min())
-        max_val = max(merged[f'{var}_outer'].max(), merged[f'{var}_kalman'].max())
+        ax1.scatter(diff_data[outer_col], diff_data[kalman_col], 
+                   alpha=0.6, s=50, color='#2ca02c', edgecolors='black', linewidth=0.5)
+        min_val = min(diff_data[outer_col].min(), diff_data[kalman_col].min())
+        max_val = max(diff_data[outer_col].max(), diff_data[kalman_col].max())
         ax1.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, alpha=0.5, label='Perfect Agreement')
-        
         ax1.set_xlabel('Outer Join', fontsize=11)
         ax1.set_ylabel('Kalman Filter', fontsize=11)
         ax1.set_title('Kalman vs Outer Join', fontsize=12, fontweight='bold')
@@ -150,99 +105,179 @@ def approach_3_scatter_matrix(material):
         
         # Scatter 2: Spline vs Outer
         ax2 = fig.add_subplot(gs[0, 1])
-        ax2.scatter(merged[f'{var}_outer'], merged[var], 
-                   alpha=0.6, s=30, color='#ff7f0e', edgecolors='black', linewidth=0.5)
-        
-        min_val = min(merged[f'{var}_outer'].min(), merged[var].min())
-        max_val = max(merged[f'{var}_outer'].max(), merged[var].max())
+        ax2.scatter(diff_data[outer_col], diff_data[spline_col], 
+                   alpha=0.6, s=50, color='#ff7f0e', edgecolors='black', linewidth=0.5)
+        min_val = min(diff_data[outer_col].min(), diff_data[spline_col].min())
+        max_val = max(diff_data[outer_col].max(), diff_data[spline_col].max())
         ax2.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, alpha=0.5, label='Perfect Agreement')
-        
         ax2.set_xlabel('Outer Join', fontsize=11)
         ax2.set_ylabel('Cubic Spline', fontsize=11)
         ax2.set_title('Spline vs Outer Join', fontsize=12, fontweight='bold')
         ax2.grid(True, alpha=0.3)
         ax2.legend()
         
-        # Scatter 3: Kalman vs Spline
+        # Scatter 3: Linear vs Outer
         ax3 = fig.add_subplot(gs[1, 0])
-        ax3.scatter(merged[var], merged[f'{var}_kalman'], 
-                   alpha=0.6, s=30, color='#1f77b4', edgecolors='black', linewidth=0.5)
-        
-        min_val = min(merged[var].min(), merged[f'{var}_kalman'].min())
-        max_val = max(merged[var].max(), merged[f'{var}_kalman'].max())
+        ax3.scatter(diff_data[outer_col], diff_data[linear_col], 
+                   alpha=0.6, s=50, color='#d62728', edgecolors='black', linewidth=0.5)
+        min_val = min(diff_data[outer_col].min(), diff_data[linear_col].min())
+        max_val = max(diff_data[outer_col].max(), diff_data[linear_col].max())
         ax3.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, alpha=0.5, label='Perfect Agreement')
-        
-        ax3.set_xlabel('Cubic Spline', fontsize=11)
-        ax3.set_ylabel('Kalman Filter', fontsize=11)
-        ax3.set_title('Kalman vs Spline', fontsize=12, fontweight='bold')
+        ax3.set_xlabel('Outer Join', fontsize=11)
+        ax3.set_ylabel('Linear Interpolation', fontsize=11)
+        ax3.set_title('Linear vs Outer Join', fontsize=12, fontweight='bold')
         ax3.grid(True, alpha=0.3)
         ax3.legend()
         
-        # Time series comparison
+        # Scatter 4: Kalman vs Spline
         ax4 = fig.add_subplot(gs[1, 1])
-        ax4.plot(merged['Date'], merged[f'{var}_outer'], label='Outer Join', 
-                linewidth=2, alpha=0.8, color='#1f77b4')
-        ax4.plot(merged['Date'], merged[f'{var}_kalman'], label='Kalman Filter', 
-                linewidth=2, alpha=0.8, color='#2ca02c')
-        ax4.plot(merged['Date'], merged[var], label='Cubic Spline', 
-                linewidth=2, alpha=0.8, color='#ff7f0e')
-        
-        ax4.set_xlabel('Date', fontsize=11)
-        ax4.set_ylabel('Value', fontsize=11)
-        ax4.set_title('All Methods Over Time', fontsize=12, fontweight='bold')
-        ax4.legend(loc='best')
+        ax4.scatter(diff_data[spline_col], diff_data[kalman_col], 
+                   alpha=0.6, s=50, color='#1f77b4', edgecolors='black', linewidth=0.5)
+        min_val = min(diff_data[spline_col].min(), diff_data[kalman_col].min())
+        max_val = max(diff_data[spline_col].max(), diff_data[kalman_col].max())
+        ax4.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, alpha=0.5, label='Perfect Agreement')
+        ax4.set_xlabel('Cubic Spline', fontsize=11)
+        ax4.set_ylabel('Kalman Filter', fontsize=11)
+        ax4.set_title('Kalman vs Spline', fontsize=12, fontweight='bold')
         ax4.grid(True, alpha=0.3)
-        ax4.tick_params(axis='x', rotation=45)
+        ax4.legend()
         
-        filename = f'approach3_scatter_matrix_{material}_{var}.png'
+        # Scatter 5: Kalman vs Linear
+        ax5 = fig.add_subplot(gs[2, 0])
+        ax5.scatter(diff_data[linear_col], diff_data[kalman_col], 
+                   alpha=0.6, s=50, color='#9467bd', edgecolors='black', linewidth=0.5)
+        min_val = min(diff_data[linear_col].min(), diff_data[kalman_col].min())
+        max_val = max(diff_data[linear_col].max(), diff_data[kalman_col].max())
+        ax5.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, alpha=0.5, label='Perfect Agreement')
+        ax5.set_xlabel('Linear Interpolation', fontsize=11)
+        ax5.set_ylabel('Kalman Filter', fontsize=11)
+        ax5.set_title('Kalman vs Linear', fontsize=12, fontweight='bold')
+        ax5.grid(True, alpha=0.3)
+        ax5.legend()
+        
+        # Scatter 6: Spline vs Linear
+        ax6 = fig.add_subplot(gs[2, 1])
+        ax6.scatter(diff_data[linear_col], diff_data[spline_col], 
+                   alpha=0.6, s=50, color='#8c564b', edgecolors='black', linewidth=0.5)
+        min_val = min(diff_data[linear_col].min(), diff_data[spline_col].min())
+        max_val = max(diff_data[linear_col].max(), diff_data[spline_col].max())
+        ax6.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, alpha=0.5, label='Perfect Agreement')
+        ax6.set_xlabel('Linear Interpolation', fontsize=11)
+        ax6.set_ylabel('Cubic Spline', fontsize=11)
+        ax6.set_title('Spline vs Linear', fontsize=12, fontweight='bold')
+        ax6.grid(True, alpha=0.3)
+        ax6.legend()
+        
+        filename = f'differences_scatter_matrix_{material}_{var}.png'
         plt.savefig(filename, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Saved: {filename}")
 
 
-def generate_summary_statistics(material):
+def plot_differences_over_time(material, diff_data):
     """
-    Generate summary statistics for the differences between methods.
+    Plot the absolute differences between methods over time for different observations only.
+    Compares Linear and Cubic Spline against Outer Join (reference).
     """
-    # Merge dataframes
-    merged = data[material]['outer'].merge(data[material]['kalman'], on='Date', suffixes=('_outer', '_kalman'))
-    merged = merged.merge(data[material]['spline'], on='Date')
+    if len(diff_data) == 0:
+        print(f"No differences found for {material}")
+        return
+    
+    vars_list = variables[material]
+    n_vars = len(vars_list)
+    fig, axes = plt.subplots(n_vars, 1, figsize=(16, 5*n_vars))
+    
+    if n_vars == 1:
+        axes = [axes]
+    
+    fig.suptitle(f'{material.capitalize()} - Absolute Differences Over Time (Only Different Observations)\n'
+                 f'n = {len(diff_data)} observations with differences', 
+                 fontsize=16, fontweight='bold', y=0.995)
+    
+    for idx, var in enumerate(vars_list):
+        ax = axes[idx]
+        
+        outer_col = f'{var}_outer'
+        spline_col = f'{var}_spline'
+        linear_col = f'{var}_linear'
+        
+        # Calculate absolute differences from reference (outer join)
+        diff_linear_outer = np.abs(diff_data[linear_col] - diff_data[outer_col])
+        diff_spline_outer = np.abs(diff_data[spline_col] - diff_data[outer_col])
+        diff_spline_linear = np.abs(diff_data[spline_col] - diff_data[linear_col])
+        
+        # Plot differences
+        ax.plot(diff_data['Date'], diff_linear_outer, label='Linear vs Reference', 
+                linewidth=2.5, alpha=0.8, color='#1f77b4', marker='o', markersize=5)
+        ax.plot(diff_data['Date'], diff_spline_outer, label='Cubic Spline vs Reference', 
+                linewidth=2.5, alpha=0.8, color='#ff7f0e', marker='s', markersize=5)
+        ax.plot(diff_data['Date'], diff_spline_linear, label='Cubic Spline vs Linear', 
+                linewidth=2, alpha=0.6, color='#2ca02c', marker='^', markersize=4, linestyle='--')
+        
+        ax.set_title(f'{var} - Deviation from Reference', fontsize=13, fontweight='bold')
+        ax.set_xlabel('Date', fontsize=11)
+        ax.set_ylabel('Absolute Difference', fontsize=11)
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    filename = f'differences_over_time_{material}.png'
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved: {filename}")
+
+
+def generate_difference_statistics(material, diff_data):
+    """
+    Generate summary statistics for differences (only for observations where methods differ).
+    Compares Linear and Cubic Spline against Outer Join (reference).
+    """
+    if len(diff_data) == 0:
+        print(f"\nNo differences found for {material}")
+        return
     
     print(f"\n{'='*80}")
-    print(f"SUMMARY STATISTICS: {material.upper()} - Method Differences")
+    print(f"DIFFERENCE STATISTICS: {material.upper()}")
+    print(f"Total observations: {len(data[material]['outer'])}")
+    print(f"Observations with differences: {len(diff_data)} ({len(diff_data)/len(data[material]['outer'])*100:.2f}%)")
     print(f"{'='*80}")
     
     for var in variables[material]:
         print(f"\n{var}:")
-        print("-" * 60)
+        print("-" * 70)
         
-        # Calculate differences
-        diff_kalman_outer = merged[f'{var}_kalman'] - merged[f'{var}_outer']
-        diff_spline_outer = merged[var] - merged[f'{var}_outer']
-        diff_kalman_spline = merged[f'{var}_kalman'] - merged[var]
+        outer_col = f'{var}_outer'
+        spline_col = f'{var}_spline'
+        linear_col = f'{var}_linear'
+        
+        # Calculate differences from reference (outer join)
+        diff_linear_outer = diff_data[linear_col] - diff_data[outer_col]
+        diff_spline_outer = diff_data[spline_col] - diff_data[outer_col]
+        diff_spline_linear = diff_data[spline_col] - diff_data[linear_col]
         
         # Statistics
         stats = pd.DataFrame({
-            'Kalman vs Outer': {
-                'Mean Diff': diff_kalman_outer.mean(),
-                'Abs Mean Diff': np.abs(diff_kalman_outer).mean(),
-                'Max Abs Diff': np.abs(diff_kalman_outer).max(),
-                'Std Dev': diff_kalman_outer.std(),
-                'Correlation': merged[f'{var}_kalman'].corr(merged[f'{var}_outer'])
+            'Linear vs Reference': {
+                'Mean Diff': diff_linear_outer.mean(),
+                'Abs Mean Diff': np.abs(diff_linear_outer).mean(),
+                'Max Abs Diff': np.abs(diff_linear_outer).max(),
+                'Std Dev': diff_linear_outer.std(),
+                'Correlation': diff_data[linear_col].corr(diff_data[outer_col])
             },
-            'Spline vs Outer': {
+            'Cubic Spline vs Reference': {
                 'Mean Diff': diff_spline_outer.mean(),
                 'Abs Mean Diff': np.abs(diff_spline_outer).mean(),
                 'Max Abs Diff': np.abs(diff_spline_outer).max(),
                 'Std Dev': diff_spline_outer.std(),
-                'Correlation': merged[var].corr(merged[f'{var}_outer'])
+                'Correlation': diff_data[spline_col].corr(diff_data[outer_col])
             },
-            'Kalman vs Spline': {
-                'Mean Diff': diff_kalman_spline.mean(),
-                'Abs Mean Diff': np.abs(diff_kalman_spline).mean(),
-                'Max Abs Diff': np.abs(diff_kalman_spline).max(),
-                'Std Dev': diff_kalman_spline.std(),
-                'Correlation': merged[f'{var}_kalman'].corr(merged[var])
+            'Cubic Spline vs Linear': {
+                'Mean Diff': diff_spline_linear.mean(),
+                'Abs Mean Diff': np.abs(diff_spline_linear).mean(),
+                'Max Abs Diff': np.abs(diff_spline_linear).max(),
+                'Std Dev': diff_spline_linear.std(),
+                'Correlation': diff_data[spline_col].corr(diff_data[linear_col])
             }
         }).T
         
@@ -251,107 +286,50 @@ def generate_summary_statistics(material):
     print(f"\n{'='*80}")
 
 
-def compare_materials_by_variable():
-    """
-    BONUS: Compare the same variable across different materials to see if
-    interpolation method performance varies by material type.
-    """
-    # Find common variables across all materials
-    common_vars = set(variables[MATERIALS[0]])
-    for material in MATERIALS[1:]:
-        common_vars = common_vars.intersection(set(variables[material]))
-    
-    if not common_vars:
-        print("\nNo common variables found across all materials.")
-        return
-    
-    print(f"\n{'='*80}")
-    print(f"CROSS-MATERIAL COMPARISON")
-    print(f"Common variables: {sorted(common_vars)}")
-    print(f"{'='*80}")
-    
-    for var in sorted(common_vars):
-        fig, axes = plt.subplots(len(MATERIALS), 1, figsize=(14, 4*len(MATERIALS)))
-        
-        if len(MATERIALS) == 1:
-            axes = [axes]
-        
-        fig.suptitle(f'Cross-Material Comparison: {var} - Method Differences', 
-                     fontsize=16, fontweight='bold', y=0.995)
-        
-        for idx, material in enumerate(MATERIALS):
-            ax = axes[idx]
-            
-            # Merge dataframes
-            merged = data[material]['outer'].merge(data[material]['kalman'], on='Date', suffixes=('_outer', '_kalman'))
-            merged = merged.merge(data[material]['spline'], on='Date')
-            
-            # Calculate absolute differences
-            diff_kalman_outer = np.abs(merged[f'{var}_kalman'] - merged[f'{var}_outer'])
-            diff_spline_outer = np.abs(merged[var] - merged[f'{var}_outer'])
-            diff_kalman_spline = np.abs(merged[f'{var}_kalman'] - merged[var])
-            
-            # Plot differences
-            ax.plot(merged['Date'], diff_kalman_outer, label='Kalman vs Outer', 
-                    linewidth=2, alpha=0.8, color='#9467bd')
-            ax.plot(merged['Date'], diff_spline_outer, label='Spline vs Outer', 
-                    linewidth=2, alpha=0.8, color='#d62728')
-            ax.plot(merged['Date'], diff_kalman_spline, label='Kalman vs Spline', 
-                    linewidth=2, alpha=0.8, color='#17becf')
-            
-            ax.set_title(f'{material.capitalize()}', fontsize=12, fontweight='bold')
-            ax.set_xlabel('Date', fontsize=10)
-            ax.set_ylabel('Absolute Difference', fontsize=10)
-            ax.legend(loc='best')
-            ax.grid(True, alpha=0.3)
-            ax.tick_params(axis='x', rotation=45)
-        
-        plt.tight_layout()
-        filename = f'cross_material_comparison_{var}.png'
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
-        plt.close()
-        print(f"Saved: {filename}")
-
-
 # Main execution
 if __name__ == "__main__":
     print("="*80)
-    print("MULTI-MATERIAL INTERPOLATION COMPARISON")
+    print("INTERPOLATION COMPARISON - DIFFERENCES ONLY")
     print("Materials: " + ", ".join([m.capitalize() for m in MATERIALS]))
+    print("Reference: Outer Join | Competing Methods: Linear Interpolation, Cubic Spline")
     print("="*80)
     
-    # Generate visualizations for each material
+    # Store difference counts
+    diff_counts = {}
+    
+    # Process each material
     for material in MATERIALS:
         print(f"\n{'#'*80}")
         print(f"# Processing: {material.upper()}")
         print(f"{'#'*80}")
         
-        print(f"\n--- Generating Approach 1: Side-by-Side Subplots ({material}) ---")
-        approach_1_side_by_side(material)
+        # Find differences
+        print(f"\n--- Finding observations with differences ({material}) ---")
+        diff_data = find_differences(material)
+        diff_counts[material] = len(diff_data)
         
-        print(f"\n--- Generating Approach 2: Difference Highlighting ({material}) ---")
-        approach_2_differences(material)
+        print(f"Total observations: {len(data[material]['outer'])}")
+        print(f"Observations with differences: {len(diff_data)} ({len(diff_data)/len(data[material]['outer'])*100:.2f}%)")
         
-        print(f"\n--- Generating Approach 3: Scatter Matrix ({material}) ---")
-        approach_3_scatter_matrix(material)
-        
-        # Generate summary statistics
-        generate_summary_statistics(material)
+        if len(diff_data) > 0:
+            # Generate visualizations
+            print(f"\n--- Generating Scatter Matrix for Different Observations ({material}) ---")
+            approach_3_scatter_matrix_differences(material, diff_data)
+            
+            print(f"\n--- Generating Time Series of Differences ({material}) ---")
+            plot_differences_over_time(material, diff_data)
+            
+            # Generate statistics
+            generate_difference_statistics(material, diff_data)
     
-    # Generate cross-material comparison
-    print(f"\n{'#'*80}")
-    print("# Generating Cross-Material Comparisons")
-    print(f"{'#'*80}")
-    compare_materials_by_variable()
-    
+    # Summary
     print("\n" + "="*80)
     print("✓ All visualizations generated successfully!")
     print("="*80)
-    print("\nFiles saved:")
+    print("\nDIFFERENCE SUMMARY:")
     for material in MATERIALS:
-        print(f"\n{material.capitalize()}:")
-        print(f"  - approach1_side_by_side_{material}.png")
-        print(f"  - approach2_differences_{material}.png")
-        print(f"  - approach3_scatter_matrix_{material}_[variable].png")
-    print("\nCross-Material:")
-    print(f"  - cross_material_comparison_[variable].png")
+        total = len(data[material]['outer'])
+        diff = diff_counts[material]
+        pct = (diff/total)*100 if total > 0 else 0
+        print(f"{material.capitalize():10s}: {diff:6d} / {total:6d} ({pct:5.2f}%) observations differ")
+    print("="*80)
