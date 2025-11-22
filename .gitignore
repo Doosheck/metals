@@ -28,3 +28,4 @@ dist/
 # Local data summaries/backups
 ~$*.xlsx
 *.bak
+.Rproj.user
