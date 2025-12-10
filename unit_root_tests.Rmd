@@ -47,6 +47,29 @@ cat("Lithium series:", ncol(lithium_prices), "\n")
 cat("Nickel series:", ncol(nickel_prices), "\n")
 cat("Cobalt series:", ncol(cobalt_prices), "\n")
 cat("Copper series:", ncol(copper_prices), "\n\n")
+
+# Calculate returns (percentage returns)
+calculate_returns <- function(prices) {
+  returns <- apply(prices, 2, function(x) {
+    x <- na.omit(x)
+    ret <- diff(log(x)) * 100  # Log returns in percentage
+    return(ret)
+  })
+  return(as.data.frame(returns))
+}
+
+lithium_returns <- calculate_returns(lithium_prices)
+nickel_returns <- calculate_returns(nickel_prices)
+cobalt_returns <- calculate_returns(cobalt_prices)
+copper_returns <- calculate_returns(copper_prices)
+
+cat("\n=== RETURNS CALCULATED ===\n")
+cat("Returns are calculated as: log(Price_t / Price_{t-1}) * 100\n")
+cat("This gives percentage log returns\n")
+cat("Lithium return series:", ncol(lithium_returns), "\n")
+cat("Nickel return series:", ncol(nickel_returns), "\n")
+cat("Cobalt return series:", ncol(cobalt_returns), "\n")
+cat("Copper return series:", ncol(copper_returns), "\n\n")
 ```
 
 ```{r helper-functions}
@@ -113,14 +136,14 @@ interpret_kpss <- function(test_result, series_name) {
 ```{r lithium-unit-root}
 cat("\n")
 cat("================================================================================\n")
-cat("                    LITHIUM PRICE SERIES - UNIT ROOT TESTS\n")
+cat("                    LITHIUM RETURNS - UNIT ROOT TESTS\n")
 cat("================================================================================\n\n")
 
 lithium_results <- list()
 
-for(i in 1:ncol(lithium_prices)) {
-  series_name <- colnames(lithium_prices)[i]
-  series_data <- lithium_prices[, i]
+for(i in 1:ncol(lithium_returns)) {
+  series_name <- colnames(lithium_returns)[i]
+  series_data <- lithium_returns[, i]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -210,14 +233,14 @@ for(i in 1:ncol(lithium_prices)) {
 ```{r nickel-unit-root}
 cat("\n")
 cat("================================================================================\n")
-cat("                    NICKEL PRICE SERIES - UNIT ROOT TESTS\n")
+cat("                    NICKEL RETURNS - UNIT ROOT TESTS\n")
 cat("================================================================================\n\n")
 
 nickel_results <- list()
 
-for(i in 1:ncol(nickel_prices)) {
-  series_name <- colnames(nickel_prices)[i]
-  series_data <- nickel_prices[, i]
+for(i in 1:ncol(nickel_returns)) {
+  series_name <- colnames(nickel_returns)[i]
+  series_data <- nickel_returns[, i]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -304,14 +327,14 @@ for(i in 1:ncol(nickel_prices)) {
 ```{r cobalt-unit-root}
 cat("\n")
 cat("================================================================================\n")
-cat("                    COBALT PRICE SERIES - UNIT ROOT TESTS\n")
+cat("                    COBALT RETURNS - UNIT ROOT TESTS\n")
 cat("================================================================================\n\n")
 
 cobalt_results <- list()
 
-for(i in 1:ncol(cobalt_prices)) {
-  series_name <- colnames(cobalt_prices)[i]
-  series_data <- cobalt_prices[, i]
+for(i in 1:ncol(cobalt_returns)) {
+  series_name <- colnames(cobalt_returns)[i]
+  series_data <- cobalt_returns[, i]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -398,14 +421,14 @@ for(i in 1:ncol(cobalt_prices)) {
 ```{r copper-unit-root}
 cat("\n")
 cat("================================================================================\n")
-cat("                    COPPER PRICE SERIES - UNIT ROOT TESTS\n")
+cat("                    COPPER RETURNS - UNIT ROOT TESTS\n")
 cat("================================================================================\n\n")
 
 copper_results <- list()
 
-for(i in 1:ncol(copper_prices)) {
-  series_name <- colnames(copper_prices)[i]
-  series_data <- copper_prices[, i]
+for(i in 1:ncol(copper_returns)) {
+  series_name <- colnames(copper_returns)[i]
+  series_data <- copper_returns[, i]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -521,19 +544,26 @@ cat("   - Interpretation: Reject H0 = Series is stationary\n")
 cat("   - Note: More powerful than standard ADF test\n\n")
 
 cat("================================================================================\n")
-cat("RECOMMENDATION FOR GARCH MODELING:\n")
+cat("ANALYSIS PERFORMED:\n")
 cat("================================================================================\n\n")
 
-cat("If series has a UNIT ROOT (non-stationary):\n")
-cat("  -> Use RETURNS (first differences) for GARCH modeling\n")
-cat("  -> Returns = (Price_t - Price_{t-1}) / Price_{t-1}\n\n")
+cat("RETURN CALCULATION:\n")
+cat("  -> Returns calculated as: log(Price_t / Price_{t-1}) * 100\n")
+cat("  -> This gives percentage log returns\n")
+cat("  -> Log returns are preferred for financial time series analysis\n\n")
 
-cat("If series is STATIONARY:\n")
-cat("  -> Can use price levels directly in GARCH models\n")
-cat("  -> However, returns are still preferred for volatility modeling\n\n")
+cat("UNIT ROOT TESTS ON RETURNS:\n")
+cat("  -> All tests performed on return series (not price levels)\n")
+cat("  -> Returns are typically stationary (price levels typically are not)\n")
+cat("  -> Stationary returns are appropriate for GARCH modeling\n\n")
 
-cat("GENERAL GUIDELINE:\n")
-cat("  -> Financial price series typically have unit roots\n")
-cat("  -> Returns are typically stationary\n")
-cat("  -> GARCH models should be applied to stationary series\n\n")
+cat("EXPECTED RESULTS:\n")
+cat("  -> Returns should be STATIONARY (reject null in ADF/PP/DF-GLS)\n")
+cat("  -> Returns should be STATIONARY (fail to reject null in KPSS)\n")
+cat("  -> If returns are stationary, they can be used directly for GARCH models\n\n")
+
+cat("RECOMMENDATION FOR GARCH MODELING:\n")
+cat("  -> If return series is stationary: Use directly in GARCH models\n")
+cat("  -> If return series has unit root (rare): Further differencing may be needed\n")
+cat("  -> GARCH models are designed for stationary series with time-varying volatility\n\n")
 ```
