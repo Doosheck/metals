@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup}
-knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE) 
 
 # Required packages
 # urca: Most comprehensive and robust package for unit root tests
