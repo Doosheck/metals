@@ -50,12 +50,14 @@ cat("Copper series:", ncol(copper_prices), "\n\n")
 
 # Calculate returns (percentage returns)
 calculate_returns <- function(prices) {
-  returns <- apply(prices, 2, function(x) {
+  returns <- lapply(1:ncol(prices), function(i) {
+    x <- prices[, i]
     x <- na.omit(x)
     ret <- diff(log(x)) * 100  # Log returns in percentage
     return(ret)
   })
-  return(as.data.frame(returns))
+  names(returns) <- colnames(prices)
+  return(returns)
 }
 
 lithium_returns <- calculate_returns(lithium_prices)
@@ -66,10 +68,10 @@ copper_returns <- calculate_returns(copper_prices)
 cat("\n=== RETURNS CALCULATED ===\n")
 cat("Returns are calculated as: log(Price_t / Price_{t-1}) * 100\n")
 cat("This gives percentage log returns\n")
-cat("Lithium return series:", ncol(lithium_returns), "\n")
-cat("Nickel return series:", ncol(nickel_returns), "\n")
-cat("Cobalt return series:", ncol(cobalt_returns), "\n")
-cat("Copper return series:", ncol(copper_returns), "\n\n")
+cat("Lithium return series:", length(lithium_returns), "\n")
+cat("Nickel return series:", length(nickel_returns), "\n")
+cat("Cobalt return series:", length(cobalt_returns), "\n")
+cat("Copper return series:", length(copper_returns), "\n\n")
 ```
 
 ```{r helper-functions}
@@ -141,9 +143,9 @@ cat("===========================================================================
 
 lithium_results <- list()
 
-for(i in 1:ncol(lithium_returns)) {
-  series_name <- colnames(lithium_returns)[i]
-  series_data <- lithium_returns[, i]
+for(i in 1:length(lithium_returns)) {
+  series_name <- names(lithium_returns)[i]
+  series_data <- lithium_returns[[i]]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -238,9 +240,9 @@ cat("===========================================================================
 
 nickel_results <- list()
 
-for(i in 1:ncol(nickel_returns)) {
-  series_name <- colnames(nickel_returns)[i]
-  series_data <- nickel_returns[, i]
+for(i in 1:length(nickel_returns)) {
+  series_name <- names(nickel_returns)[i]
+  series_data <- nickel_returns[[i]]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -332,9 +334,9 @@ cat("===========================================================================
 
 cobalt_results <- list()
 
-for(i in 1:ncol(cobalt_returns)) {
-  series_name <- colnames(cobalt_returns)[i]
-  series_data <- cobalt_returns[, i]
+for(i in 1:length(cobalt_returns)) {
+  series_name <- names(cobalt_returns)[i]
+  series_data <- cobalt_returns[[i]]
   series_data <- na.omit(series_data)
   
   cat("\n")
@@ -426,9 +428,9 @@ cat("===========================================================================
 
 copper_results <- list()
 
-for(i in 1:ncol(copper_returns)) {
-  series_name <- colnames(copper_returns)[i]
-  series_data <- copper_returns[, i]
+for(i in 1:length(copper_returns)) {
+  series_name <- names(copper_returns)[i]
+  series_data <- copper_returns[[i]]
   series_data <- na.omit(series_data)
   
   cat("\n")
