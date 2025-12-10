@@ -54,7 +54,7 @@ cat("Copper series:", ncol(copper_prices), "\n\n")
 interpret_adf <- function(test_result, series_name) {
   cat("\n--- INTERPRETATION for", series_name, "---\n")
   
-  test_stat <- test_result@teststat
+  test_stat <- as.numeric(test_result@teststat)[1]
   crit_vals <- test_result@cval
   
   cat("Test Statistic:", round(test_stat, 4), "\n")
@@ -80,7 +80,7 @@ interpret_adf <- function(test_result, series_name) {
 interpret_kpss <- function(test_result, series_name) {
   cat("\n--- INTERPRETATION for", series_name, "---\n")
   
-  test_stat <- test_result@teststat
+  test_stat <- as.numeric(test_result@teststat)[1]
   crit_vals <- test_result@cval
   
   cat("Test Statistic:", round(test_stat, 4), "\n")
@@ -146,12 +146,12 @@ for(i in 1:ncol(lithium_prices)) {
   print(summary(pp_test))
   
   cat("\n--- INTERPRETATION for Lithium", series_name, "---\n")
-  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
       ", 5%=", round(pp_test@cval[2], 4), 
       ", 10%=", round(pp_test@cval[3], 4), "\n")
   
-  if(pp_test@teststat < pp_test@cval[3]) {
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Lithium", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -179,12 +179,12 @@ for(i in 1:ncol(lithium_prices)) {
   print(summary(ers_test))
   
   cat("\n--- INTERPRETATION for Lithium", series_name, "---\n")
-  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
       ", 5%=", round(ers_test@cval[2], 4), 
       ", 10%=", round(ers_test@cval[3], 4), "\n")
   
-  if(ers_test@teststat < ers_test@cval[3]) {
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Lithium", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -243,12 +243,12 @@ for(i in 1:ncol(nickel_prices)) {
   print(summary(pp_test))
   
   cat("\n--- INTERPRETATION for Nickel", series_name, "---\n")
-  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
       ", 5%=", round(pp_test@cval[2], 4), 
       ", 10%=", round(pp_test@cval[3], 4), "\n")
   
-  if(pp_test@teststat < pp_test@cval[3]) {
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Nickel", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -274,12 +274,12 @@ for(i in 1:ncol(nickel_prices)) {
   print(summary(ers_test))
   
   cat("\n--- INTERPRETATION for Nickel", series_name, "---\n")
-  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
       ", 5%=", round(ers_test@cval[2], 4), 
       ", 10%=", round(ers_test@cval[3], 4), "\n")
   
-  if(ers_test@teststat < ers_test@cval[3]) {
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Nickel", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -337,12 +337,12 @@ for(i in 1:ncol(cobalt_prices)) {
   print(summary(pp_test))
   
   cat("\n--- INTERPRETATION for Cobalt", series_name, "---\n")
-  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
       ", 5%=", round(pp_test@cval[2], 4), 
       ", 10%=", round(pp_test@cval[3], 4), "\n")
   
-  if(pp_test@teststat < pp_test@cval[3]) {
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Cobalt", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -368,12 +368,12 @@ for(i in 1:ncol(cobalt_prices)) {
   print(summary(ers_test))
   
   cat("\n--- INTERPRETATION for Cobalt", series_name, "---\n")
-  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
       ", 5%=", round(ers_test@cval[2], 4), 
       ", 10%=", round(ers_test@cval[3], 4), "\n")
   
-  if(ers_test@teststat < ers_test@cval[3]) {
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Cobalt", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -431,12 +431,12 @@ for(i in 1:ncol(copper_prices)) {
   print(summary(pp_test))
   
   cat("\n--- INTERPRETATION for Copper", series_name, "---\n")
-  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
       ", 5%=", round(pp_test@cval[2], 4), 
       ", 10%=", round(pp_test@cval[3], 4), "\n")
   
-  if(pp_test@teststat < pp_test@cval[3]) {
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Copper", series_name, "is STATIONARY (no unit root)\n")
   } else {
@@ -462,12 +462,12 @@ for(i in 1:ncol(copper_prices)) {
   print(summary(ers_test))
   
   cat("\n--- INTERPRETATION for Copper", series_name, "---\n")
-  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
   cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
       ", 5%=", round(ers_test@cval[2], 4), 
       ", 10%=", round(ers_test@cval[3], 4), "\n")
   
-  if(ers_test@teststat < ers_test@cval[3]) {
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
     cat("RESULT: REJECT null hypothesis\n")
     cat("CONCLUSION: Series Copper", series_name, "is STATIONARY (no unit root)\n")
   } else {
