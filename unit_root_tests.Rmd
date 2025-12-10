@@ -1,0 +1,539 @@
+---
+title: "Unit Root Tests for Metals Price Series"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+
+# Required packages
+# urca: Most comprehensive and robust package for unit root tests
+# tseries: Additional unit root tests
+pkgs <- c("urca", "tseries", "dplyr", "knitr")
+missing <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+if(length(missing)) install.packages(missing)
+lapply(pkgs, library, character.only = TRUE)
+
+cat("=== PACKAGE INFORMATION ===\n")
+cat("Primary package: 'urca' - Unit Root and Cointegration Tests for Time Series Data\n")
+cat("Developed by Bernhard Pfaff, widely used in econometrics research\n")
+cat("Secondary package: 'tseries' - for additional ADF and PP tests\n\n")
+```
+
+```{r load-data}
+# Load data
+lithium = read.csv("data/ALL_lithium_prices_cubic_spline.csv")
+nickel = read.csv("data/ALL_nickel_prices_cubic_spline.csv")
+cobalt = read.csv("data/ALL_cobalt_prices_cubic_spline.csv")
+copper = read.csv("data/ALL_copper_prices_cubic_spline.csv")
+
+# Convert Date columns
+lithium$Date <- as.Date(lithium$Date)
+nickel$Date  <- as.Date(nickel$Date)
+cobalt$Date  <- as.Date(cobalt$Date)
+copper$Date  <- as.Date(copper$Date)
+
+# Remove LISAME from lithium
+lithium <- subset(lithium, select = -LISAME)
+
+# Get price columns
+lithium_prices <- lithium[, -1]
+nickel_prices <- nickel[, -1]
+cobalt_prices <- cobalt[, -1]
+copper_prices <- copper[, -1]
+
+cat("\n=== DATA LOADED ===\n")
+cat("Lithium series:", ncol(lithium_prices), "\n")
+cat("Nickel series:", ncol(nickel_prices), "\n")
+cat("Cobalt series:", ncol(cobalt_prices), "\n")
+cat("Copper series:", ncol(copper_prices), "\n\n")
+```
+
+```{r helper-functions}
+# Helper function to interpret unit root test results
+interpret_adf <- function(test_result, series_name) {
+  cat("\n--- INTERPRETATION for", series_name, "---\n")
+  
+  test_stat <- test_result@teststat
+  crit_vals <- test_result@cval
+  
+  cat("Test Statistic:", round(test_stat, 4), "\n")
+  cat("Critical Values: 1%=", round(crit_vals[1], 4), 
+      ", 5%=", round(crit_vals[2], 4), 
+      ", 10%=", round(crit_vals[3], 4), "\n")
+  
+  if(test_stat < crit_vals[3]) {
+    cat("RESULT: REJECT null hypothesis at 10% level\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  } else if(test_stat < crit_vals[2]) {
+    cat("RESULT: REJECT null hypothesis at 5% level\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  } else if(test_stat < crit_vals[1]) {
+    cat("RESULT: REJECT null hypothesis at 1% level\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+}
+
+interpret_kpss <- function(test_result, series_name) {
+  cat("\n--- INTERPRETATION for", series_name, "---\n")
+  
+  test_stat <- test_result@teststat
+  crit_vals <- test_result@cval
+  
+  cat("Test Statistic:", round(test_stat, 4), "\n")
+  cat("Critical Values: 10%=", round(crit_vals[1], 4), 
+      ", 5%=", round(crit_vals[2], 4), 
+      ", 2.5%=", round(crit_vals[3], 4),
+      ", 1%=", round(crit_vals[4], 4), "\n")
+  
+  if(test_stat > crit_vals[4]) {
+    cat("RESULT: REJECT null hypothesis at 1% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else if(test_stat > crit_vals[3]) {
+    cat("RESULT: REJECT null hypothesis at 2.5% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else if(test_stat > crit_vals[2]) {
+    cat("RESULT: REJECT null hypothesis at 5% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else if(test_stat > crit_vals[1]) {
+    cat("RESULT: REJECT null hypothesis at 10% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  }
+}
+```
+
+# LITHIUM UNIT ROOT TESTS
+
+```{r lithium-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    LITHIUM PRICE SERIES - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+lithium_results <- list()
+
+for(i in 1:ncol(lithium_prices)) {
+  series_name <- colnames(lithium_prices)[i]
+  series_data <- lithium_prices[, i]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: LITHIUM -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. Augmented Dickey-Fuller (ADF) Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Lithium", series_name))
+  
+  # 2. Phillips-Perron (PP) Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Lithium", series_name, "---\n")
+  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(pp_test@teststat < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("NOTE: This test has OPPOSITE hypotheses compared to ADF and PP tests!\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Lithium", series_name))
+  
+  # 4. DF-GLS Test (Elliott-Rothenberg-Stock)
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n")
+  cat("NOTE: This is an improved version of ADF with better power\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Lithium", series_name, "---\n")
+  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(ers_test@teststat < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # Store results
+  lithium_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+```
+
+# NICKEL UNIT ROOT TESTS
+
+```{r nickel-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    NICKEL PRICE SERIES - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+nickel_results <- list()
+
+for(i in 1:ncol(nickel_prices)) {
+  series_name <- colnames(nickel_prices)[i]
+  series_data <- nickel_prices[, i]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: NICKEL -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. ADF Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Nickel", series_name))
+  
+  # 2. PP Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Nickel", series_name, "---\n")
+  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(pp_test@teststat < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Nickel", series_name))
+  
+  # 4. DF-GLS Test
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Nickel", series_name, "---\n")
+  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(ers_test@teststat < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  nickel_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+```
+
+# COBALT UNIT ROOT TESTS
+
+```{r cobalt-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    COBALT PRICE SERIES - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+cobalt_results <- list()
+
+for(i in 1:ncol(cobalt_prices)) {
+  series_name <- colnames(cobalt_prices)[i]
+  series_data <- cobalt_prices[, i]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: COBALT -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. ADF Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Cobalt", series_name))
+  
+  # 2. PP Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Cobalt", series_name, "---\n")
+  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(pp_test@teststat < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Cobalt", series_name))
+  
+  # 4. DF-GLS Test
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Cobalt", series_name, "---\n")
+  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(ers_test@teststat < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  cobalt_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+```
+
+# COPPER UNIT ROOT TESTS
+
+```{r copper-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    COPPER PRICE SERIES - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+copper_results <- list()
+
+for(i in 1:ncol(copper_prices)) {
+  series_name <- colnames(copper_prices)[i]
+  series_data <- copper_prices[, i]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: COPPER -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. ADF Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Copper", series_name))
+  
+  # 2. PP Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Copper", series_name, "---\n")
+  cat("Test Statistic:", round(pp_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(pp_test@teststat < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Copper", series_name))
+  
+  # 4. DF-GLS Test
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Copper", series_name, "---\n")
+  cat("Test Statistic:", round(ers_test@teststat, 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(ers_test@teststat < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  copper_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+```
+
+# SUMMARY
+
+```{r summary}
+cat("\n")
+cat("================================================================================\n")
+cat("                              TEST SUMMARY\n")
+cat("================================================================================\n\n")
+
+cat("UNIT ROOT TESTS PERFORMED:\n\n")
+
+cat("1. AUGMENTED DICKEY-FULLER (ADF) TEST\n")
+cat("   - Package: urca::ur.df()\n")
+cat("   - Null Hypothesis: Series has a unit root (non-stationary)\n")
+cat("   - Interpretation: Reject H0 = Series is stationary\n\n")
+
+cat("2. PHILLIPS-PERRON (PP) TEST\n")
+cat("   - Package: urca::ur.pp()\n")
+cat("   - Null Hypothesis: Series has a unit root (non-stationary)\n")
+cat("   - Interpretation: Reject H0 = Series is stationary\n")
+cat("   - Note: Corrects for serial correlation without including lags\n\n")
+
+cat("3. KPSS STATIONARITY TEST\n")
+cat("   - Package: urca::ur.kpss()\n")
+cat("   - Null Hypothesis: Series is stationary (OPPOSITE of ADF/PP)\n")
+cat("   - Interpretation: Reject H0 = Series has a unit root\n")
+cat("   - Note: Used as complementary test to ADF/PP\n\n")
+
+cat("4. DF-GLS TEST (Elliott-Rothenberg-Stock)\n")
+cat("   - Package: urca::ur.ers()\n")
+cat("   - Null Hypothesis: Series has a unit root (non-stationary)\n")
+cat("   - Interpretation: Reject H0 = Series is stationary\n")
+cat("   - Note: More powerful than standard ADF test\n\n")
+
+cat("================================================================================\n")
+cat("RECOMMENDATION FOR GARCH MODELING:\n")
+cat("================================================================================\n\n")
+
+cat("If series has a UNIT ROOT (non-stationary):\n")
+cat("  -> Use RETURNS (first differences) for GARCH modeling\n")
+cat("  -> Returns = (Price_t - Price_{t-1}) / Price_{t-1}\n\n")
+
+cat("If series is STATIONARY:\n")
+cat("  -> Can use price levels directly in GARCH models\n")
+cat("  -> However, returns are still preferred for volatility modeling\n\n")
+
+cat("GENERAL GUIDELINE:\n")
+cat("  -> Financial price series typically have unit roots\n")
+cat("  -> Returns are typically stationary\n")
+cat("  -> GARCH models should be applied to stationary series\n\n")
+```
