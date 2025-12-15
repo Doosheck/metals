@@ -88,29 +88,120 @@ par(mfrow=c(1,1))
 cat("\n=== LITHIUM ARMA MODEL SELECTION FOR ALL SERIES ===\n\n")
 
 lithium_arma_orders <- list()
+lithium_arma_orders_auto <- list()
 lithium_returns_clean <- list()
 
 for(i in 1:ncol(lithium_prices)) {
   series_name <- colnames(lithium_prices)[i]
-  cat("--- Series:", series_name, "---\n")
+  cat("========================================\n")
+  cat("Series:", series_name, "\n")
+  cat("========================================\n\n")
   
   returns <- na.omit(lithium_returns_df[, i+1])
   lithium_returns_clean[[series_name]] <- returns
   
   # ADF test
+  cat("--- Stationarity Test (", series_name, ") ---\n", sep="")
   adf_test <- adf.test(returns)
   print(adf_test)
   
-  # Auto ARIMA selection
-  auto_model <- auto.arima(returns, max.p=5, max.q=5, 
-                          seasonal=FALSE, ic="aic", trace=FALSE)
-  summary(auto_model)
+  # Plot ACF and PACF for autocorrelation check
+  par(mfrow=c(2,1))
+  acf(returns, main=paste("ACF - Lithium", series_name), lag.max=30)
+  pacf(returns, main=paste("PACF - Lithium", series_name), lag.max=30)
+  par(mfrow=c(1,1))
   
-  p <- auto_model$arma[1]
-  q <- auto_model$arma[2]
-  lithium_arma_orders[[series_name]] <- c(p, q)
+  # Ljung-Box test for autocorrelation
+  cat("\n--- Ljung-Box Test for Autocorrelation (", series_name, ") ---\n", sep="")
+  lb_test <- Box.test(returns, lag=20, type="Ljung-Box")
+  print(lb_test)
+  if(lb_test$p.value < 0.05) {
+    cat("Significant autocorrelation detected (p < 0.05)\n\n")
+  } else {
+    cat("No significant autocorrelation detected (p >= 0.05)\n\n")
+  }
   
-  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", p, q, series_name))
+  # Compare ARMA(1,0) and ARMA(0,1) - Simple approach
+  cat("--- Simple Model Selection (", series_name, ") ---\n", sep="")
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+  
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best simple model
+  if(nrow(aic_results) > 0) {
+    best_simple <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nSimple Model Comparison:\n")
+    print(aic_results)
+    cat("\nBest Simple Model for", series_name, ":", best_simple$Model, "with AIC =", round(best_simple$AIC, 2), "\n")
+    
+    if(best_simple$Model == "ARMA(1,0)") {
+      lithium_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      lithium_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both simple models failed for", series_name, ", defaulting to ARMA(1,0)\n")
+    lithium_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  # Auto ARIMA selection - Best fit approach
+  cat("\n--- Auto Model Selection (", series_name, ") ---\n", sep="")
+  auto_model <- tryCatch({
+    auto.arima(returns, max.p=5, max.q=5, seasonal=FALSE, ic="aic", trace=TRUE)
+  }, error = function(e) {
+    cat("Auto ARIMA failed for", series_name, "\n")
+    NULL
+  })
+  
+  if(!is.null(auto_model)) {
+    p_auto <- auto_model$arma[1]
+    q_auto <- auto_model$arma[2]
+    lithium_arma_orders_auto[[series_name]] <- c(p_auto, q_auto)
+    cat("\nBest Auto Model for", series_name, ": ARMA(", p_auto, ",", q_auto, ") with AIC =", 
+        round(AIC(auto_model), 2), "\n", sep="")
+    
+    # Check residuals of auto model for remaining autocorrelation
+    cat("\n--- Residual Diagnostics for Auto Model (", series_name, ") ---\n", sep="")
+    residuals_auto <- residuals(auto_model)
+    lb_resid <- Box.test(residuals_auto, lag=20, type="Ljung-Box")
+    print(lb_resid)
+    if(lb_resid$p.value < 0.05) {
+      cat("Warning: Residuals still show autocorrelation for", series_name, "\n")
+    } else {
+      cat("Residuals appear to be white noise for", series_name, "\n")
+    }
+    
+    # Plot residual ACF
+    par(mfrow=c(1,2))
+    acf(residuals_auto, main=paste("ACF Residuals - Lithium", series_name), lag.max=30)
+    pacf(residuals_auto, main=paste("PACF Residuals - Lithium", series_name), lag.max=30)
+    par(mfrow=c(1,1))
+  } else {
+    lithium_arma_orders_auto[[series_name]] <- lithium_arma_orders[[series_name]]
+  }
+  
+  cat("\n--- Final Selection Summary for", series_name, "---\n")
+  cat("Simple approach: ARMA(", lithium_arma_orders[[series_name]][1], ",", 
+      lithium_arma_orders[[series_name]][2], ")\n", sep="")
+  cat("Auto approach: ARMA(", lithium_arma_orders_auto[[series_name]][1], ",", 
+      lithium_arma_orders_auto[[series_name]][2], ")\n", sep="")
+  cat("\n\n")
 }
 ```
 
@@ -118,14 +209,21 @@ for(i in 1:ncol(lithium_prices)) {
 cat("\n=== LITHIUM UNIVARIATE GARCH MODELS ===\n\n")
 
 lithium_garch_fits <- list()
+lithium_garch_fits_auto <- list()
 
 for(i in 1:ncol(lithium_prices)) {
   series_name <- colnames(lithium_prices)[i]
-  cat("--- Fitting GARCH for:", series_name, "---\n")
+  cat("========================================\n")
+  cat("Fitting GARCH for:", series_name, "\n")
+  cat("========================================\n\n")
   
   returns <- lithium_returns_clean[[series_name]]
+  
+  # Fit with simple ARMA order
+  cat("--- Simple ARMA approach for", series_name, "---\n")
   p <- lithium_arma_orders[[series_name]][1]
   q <- lithium_arma_orders[[series_name]][2]
+  cat("Using ARMA(", p, ",", q, ")\n", sep="")
   
   spec <- ugarchspec(
     variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
@@ -136,22 +234,23 @@ for(i in 1:ncol(lithium_prices)) {
   fit <- tryCatch({
     ugarchfit(spec = spec, data = returns, solver = "hybrid")
   }, error = function(e) {
-    cat("Failed with ARMA(", p, ",", q, "). Trying ARMA(1,1)...\n")
+    cat("Failed with ARMA(", p, ",", q, ") for", series_name, ". Trying ARMA(1,0)...\n")
     NULL
   })
   
   if(is.null(fit) || convergence(fit) != 0) {
-    cat("Fitting simplified ARMA(1,1)-GARCH(1,1) model\n")
+    cat("Fitting simplified ARMA(1,0)-GARCH(1,1) model for", series_name, "\n")
     spec <- ugarchspec(
       variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
-      mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+      mean.model = list(armaOrder = c(1, 0), include.mean = TRUE),
       distribution.model = "std"
     )
     fit <- ugarchfit(spec = spec, data = returns, solver = "hybrid")
-    lithium_arma_orders[[series_name]] <- c(1, 1)
+    lithium_arma_orders[[series_name]] <- c(1, 0)
   }
   
   lithium_garch_fits[[series_name]] <- fit
+  cat("\nSimple ARMA-GARCH Results for", series_name, ":\n")
   print(fit)
   
   if(convergence(fit) == 0) {
@@ -162,8 +261,48 @@ for(i in 1:ncol(lithium_prices)) {
     plot(fit, which = 9)
     par(mfrow=c(1,1))
   }
+  
+  # Fit with auto ARMA order
+  cat("\n--- Auto ARMA approach for", series_name, "---\n")
+  p_auto <- lithium_arma_orders_auto[[series_name]][1]
+  q_auto <- lithium_arma_orders_auto[[series_name]][2]
+  cat("Using ARMA(", p_auto, ",", q_auto, ")\n", sep="")
+  
+  spec_auto <- ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model = list(armaOrder = c(p_auto, q_auto), include.mean = TRUE),
+    distribution.model = "std"
+  )
+  
+  fit_auto <- tryCatch({
+    ugarchfit(spec = spec_auto, data = returns, solver = "hybrid")
+  }, error = function(e) {
+    cat("Failed with auto ARMA(", p_auto, ",", q_auto, ") for", series_name, "\n")
+    NULL
+  })
+  
+  if(is.null(fit_auto) || convergence(fit_auto) != 0) {
+    cat("Auto model failed, using simple model for", series_name, "\n")
+    fit_auto <- fit
+  }
+  
+  lithium_garch_fits_auto[[series_name]] <- fit_auto
+  cat("\nAuto ARMA-GARCH Results for", series_name, ":\n")
+  print(fit_auto)
+  
+  if(convergence(fit_auto) == 0) {
+    par(mfrow=c(2,2))
+    plot(fit_auto, which = 1)
+    plot(fit_auto, which = 3)
+    plot(fit_auto, which = 8)
+    plot(fit_auto, which = 9)
+    par(mfrow=c(1,1))
+  }
+  
   cat("\n")
 }
+
+cat("\n=== Using AUTO ARMA orders for DCC-GARCH ===\n\n")
 ```
 
 ```{r lithium-dcc-garch}
@@ -253,15 +392,48 @@ for(i in 1:ncol(nickel_prices)) {
   adf_test <- adf.test(returns)
   print(adf_test)
   
-  auto_model <- auto.arima(returns, max.p=5, max.q=5, 
-                          seasonal=FALSE, ic="aic", trace=FALSE)
-  summary(auto_model)
+  # Compare ARMA(1,0) and ARMA(0,1)
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
   
-  p <- auto_model$arma[1]
-  q <- auto_model$arma[2]
-  nickel_arma_orders[[series_name]] <- c(p, q)
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
   
-  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", p, q, series_name))
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best model
+  if(nrow(aic_results) > 0) {
+    best_model <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nModel Comparison:\n")
+    print(aic_results)
+    cat("\nBest Model:", best_model$Model, "with AIC =", best_model$AIC, "\n")
+    
+    if(best_model$Model == "ARMA(1,0)") {
+      nickel_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      nickel_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both models failed, defaulting to ARMA(1,0)\n")
+    nickel_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", 
+              nickel_arma_orders[[series_name]][1], 
+              nickel_arma_orders[[series_name]][2], 
+              series_name))
 }
 ```
 
@@ -393,15 +565,48 @@ for(i in 1:ncol(cobalt_prices)) {
   adf_test <- adf.test(returns)
   print(adf_test)
   
-  auto_model <- auto.arima(returns, max.p=5, max.q=5, 
-                          seasonal=FALSE, ic="aic", trace=FALSE)
-  summary(auto_model)
+  # Compare ARMA(1,0) and ARMA(0,1)
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
   
-  p <- auto_model$arma[1]
-  q <- auto_model$arma[2]
-  cobalt_arma_orders[[series_name]] <- c(p, q)
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
   
-  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", p, q, series_name))
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best model
+  if(nrow(aic_results) > 0) {
+    best_model <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nModel Comparison:\n")
+    print(aic_results)
+    cat("\nBest Model:", best_model$Model, "with AIC =", best_model$AIC, "\n")
+    
+    if(best_model$Model == "ARMA(1,0)") {
+      cobalt_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      cobalt_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both models failed, defaulting to ARMA(1,0)\n")
+    cobalt_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", 
+              cobalt_arma_orders[[series_name]][1], 
+              cobalt_arma_orders[[series_name]][2], 
+              series_name))
 }
 ```
 
@@ -606,15 +811,48 @@ for(i in 1:ncol(copper_prices)) {
   adf_test <- adf.test(returns)
   print(adf_test)
   
-  auto_model <- auto.arima(returns, max.p=5, max.q=5, 
-                          seasonal=FALSE, ic="aic", trace=FALSE)
-  summary(auto_model)
+  # Compare ARMA(1,0) and ARMA(0,1)
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
   
-  p <- auto_model$arma[1]
-  q <- auto_model$arma[2]
-  copper_arma_orders[[series_name]] <- c(p, q)
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
   
-  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", p, q, series_name))
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best model
+  if(nrow(aic_results) > 0) {
+    best_model <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nModel Comparison:\n")
+    print(aic_results)
+    cat("\nBest Model:", best_model$Model, "with AIC =", best_model$AIC, "\n")
+    
+    if(best_model$Model == "ARMA(1,0)") {
+      copper_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      copper_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both models failed, defaulting to ARMA(1,0)\n")
+    copper_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", 
+              copper_arma_orders[[series_name]][1], 
+              copper_arma_orders[[series_name]][2], 
+              series_name))
 }
 ```
 
