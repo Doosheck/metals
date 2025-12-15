@@ -569,3 +569,141 @@ cat("  -> If return series is stationary: Use directly in GARCH models\n")
 cat("  -> If return series has unit root (rare): Further differencing may be needed\n")
 cat("  -> GARCH models are designed for stationary series with time-varying volatility\n\n")
 ```
+
+# Add this code at the end of your script, after the SUMMARY section
+
+```{r results-summary-table}
+library(knitr)
+
+# Helper function to determine stationarity from test results
+is_stationary_adf <- function(test_result) {
+  test_stat <- as.numeric(test_result@teststat)[1]
+  crit_vals <- test_result@cval
+  return(test_stat < crit_vals[3])  # Reject null at 10% level
+}
+
+is_stationary_pp <- function(test_result) {
+  test_stat <- as.numeric(test_result@teststat)[1]
+  crit_vals <- test_result@cval
+  return(test_stat < crit_vals[3])  # Reject null at 10% level
+}
+
+is_stationary_kpss <- function(test_result) {
+  test_stat <- as.numeric(test_result@teststat)[1]
+  crit_vals <- test_result@cval
+  return(test_stat < crit_vals[1])  # Fail to reject null at 10% level
+}
+
+is_stationary_ers <- function(test_result) {
+  test_stat <- as.numeric(test_result@teststat)[1]
+  crit_vals <- test_result@cval
+  return(test_stat < crit_vals[3])  # Reject null at 10% level
+}
+
+# Create summary dataframe
+summary_data <- data.frame(
+  Metal = character(),
+  Series = character(),
+  ADF = character(),
+  PP = character(),
+  KPSS = character(),
+  ERS = character(),
+  stringsAsFactors = FALSE
+)
+
+# Function to extract and store results for each metal
+extract_results <- function(results_list, metal_name) {
+  local_summary <- data.frame()
+  
+  for(i in seq_along(results_list)) {
+    series_name <- names(results_list)[i]
+    tests <- results_list[[i]]
+    
+    adf_stat <- ifelse(is_stationary_adf(tests$adf), "Stationary", "Unit Root")
+    pp_stat <- ifelse(is_stationary_pp(tests$pp), "Stationary", "Unit Root")
+    kpss_stat <- ifelse(is_stationary_kpss(tests$kpss), "Stationary", "Unit Root")
+    ers_stat <- ifelse(is_stationary_ers(tests$ers), "Stationary", "Unit Root")
+    
+    row <- data.frame(
+      Metal = metal_name,
+      Series = series_name,
+      ADF = adf_stat,
+      PP = pp_stat,
+      KPSS = kpss_stat,
+      ERS = ers_stat,
+      stringsAsFactors = FALSE
+    )
+    
+    local_summary <- rbind(local_summary, row)
+  }
+  
+  return(local_summary)
+}
+
+# Extract results from all metals
+summary_data <- rbind(summary_data, extract_results(lithium_results, "Lithium"))
+summary_data <- rbind(summary_data, extract_results(nickel_results, "Nickel"))
+summary_data <- rbind(summary_data, extract_results(cobalt_results, "Cobalt"))
+summary_data <- rbind(summary_data, extract_results(copper_results, "Copper"))
+
+# Create HTML table with color coding
+cat("\n")
+cat("================================================================================\n")
+cat("                    UNIT ROOT TESTS - SUMMARY TABLE\n")
+cat("================================================================================\n\n")
+
+# Function to color results
+color_result <- function(x) {
+  ifelse(x == "Stationary", 
+         '<span style="background-color: #90EE90; padding: 2px 6px;">Stationary</span>',
+         '<span style="background-color: #FFB6C6; padding: 2px 6px;">Unit Root</span>')
+}
+
+# Create HTML table
+html_table <- data.frame(
+  Metal = summary_data$Metal,
+  Series = summary_data$Series,
+  ADF = sapply(summary_data$ADF, color_result),
+  PP = sapply(summary_data$PP, color_result),
+  KPSS = sapply(summary_data$KPSS, color_result),
+  ERS = sapply(summary_data$ERS, color_result),
+  check.names = FALSE
+)
+
+# Print as kable with HTML
+print(kable(html_table, format = "html", escape = FALSE, 
+            table.attr = 'style="border-collapse: collapse; width: 100%;"',
+            align = c('l', 'l', 'c', 'c', 'c', 'c')))
+
+# Also print as text table
+cat("\n\nText Version of Summary Table:\n")
+print(kable(summary_data, format = "simple"))
+
+cat("\n\nLegend:\n")
+cat("  GREEN (Stationary)  : Series is stationary (no unit root)\n")
+cat("  RED (Unit Root)     : Series has a unit root (non-stationary)\n\n")
+
+cat("Test Descriptions:\n")
+cat("  ADF  : Augmented Dickey-Fuller Test\n")
+cat("  PP   : Phillips-Perron Test\n")
+cat("  KPSS : KPSS Stationarity Test (opposite null hypothesis)\n")
+cat("  ERS  : DF-GLS Test (Elliott-Rothenberg-Stock)\n\n")
+
+cat("Summary Statistics:\n")
+cat("Total Series Analyzed:", nrow(summary_data), "\n")
+cat("Total Test Results:", nrow(summary_data) * 4, "\n")
+
+# Count stationarity by test
+adf_stationary <- sum(summary_data$ADF == "Stationary")
+pp_stationary <- sum(summary_data$PP == "Stationary")
+kpss_stationary <- sum(summary_data$KPSS == "Stationary")
+ers_stationary <- sum(summary_data$ERS == "Stationary")
+
+cat("\nStationarity Count by Test:\n")
+cat("  ADF:", adf_stationary, "/", nrow(summary_data), "series\n")
+cat("  PP:", pp_stationary, "/", nrow(summary_data), "series\n")
+cat("  KPSS:", kpss_stationary, "/", nrow(summary_data), "series\n")
+cat("  ERS:", ers_stationary, "/", nrow(summary_data), "series\n\n")
+
+cat("================================================================================\n")
+```
