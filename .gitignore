@@ -29,3 +29,4 @@ dist/
 ~$*.xlsx
 *.bak
 .Rproj.user
+.lintr
