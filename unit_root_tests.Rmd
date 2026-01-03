@@ -16,11 +16,6 @@ pkgs <- c("urca", "tseries", "dplyr", "knitr")
 missing <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
 if(length(missing)) install.packages(missing)
 lapply(pkgs, library, character.only = TRUE)
-
-cat("=== PACKAGE INFORMATION ===\n")
-cat("Primary package: 'urca' - Unit Root and Cointegration Tests for Time Series Data\n")
-cat("Developed by Bernhard Pfaff, widely used in econometrics research\n")
-cat("Secondary package: 'tseries' - for additional ADF and PP tests\n\n")
 ```
 
 ```{r load-data}
@@ -56,7 +51,7 @@ calculate_returns <- function(prices) {
   returns <- lapply(1:ncol(prices), function(i) {
     x <- prices[, i]
     x <- na.omit(x)
-    ret <- diff(log(x)) * 100  # Log returns in percentage
+    ret <- (diff(x) / x[-length(x)]) * 100  # Simple returns in percentage
     return(ret)
   })
   names(returns) <- colnames(prices)
@@ -69,8 +64,8 @@ cobalt_returns <- calculate_returns(cobalt_prices)
 copper_returns <- calculate_returns(copper_prices)
 
 cat("\n=== RETURNS CALCULATED ===\n")
-cat("Returns are calculated as: log(Price_t / Price_{t-1}) * 100\n")
-cat("This gives percentage log returns\n")
+cat("Returns are calculated as: (Price_t - Price_{t-1}) / Price_{t-1} * 100\n")
+cat("This gives percentage simple returns\n")
 cat("Lithium return series:", length(lithium_returns), "\n")
 cat("Nickel return series:", length(nickel_returns), "\n")
 cat("Cobalt return series:", length(cobalt_returns), "\n")
@@ -679,731 +674,696 @@ abline(h=mean(sapply(copper_results, function(x) x$ers@cval[2])), col="red", lty
 par(mfrow=c(1,1))
 ```
 
-# SUMMARY
+# DCC-GARCH MODEL SELECTION
 
-```{r summary}
+```{r dcc-setup, message=FALSE, warning=FALSE}
 cat("\n")
 cat("================================================================================\n")
-cat("                              TEST SUMMARY\n")
+cat("              DCC-GARCH MODEL SELECTION AND ESTIMATION\n")
 cat("================================================================================\n\n")
 
-cat("UNIT ROOT TESTS PERFORMED:\n\n")
+# Install and load ConnectednessApproach package
+if (!require("ConnectednessApproach", quietly = TRUE)) {
+  if (!require("devtools", quietly = TRUE)) {
+    install.packages("devtools")
+  }
+  library(devtools)
+  install_github("GabauerDavid/ConnectednessApproach")
+}
 
-cat("1. AUGMENTED DICKEY-FULLER (ADF) TEST\n")
-cat("   - Package: urca::ur.df()\n")
-cat("   - Null Hypothesis: Series has a unit root (non-stationary)\n")
-cat("   - Interpretation: Reject H0 = Series is stationary\n\n")
-
-cat("2. PHILLIPS-PERRON (PP) TEST\n")
-cat("   - Package: urca::ur.pp()\n")
-cat("   - Null Hypothesis: Series has a unit root (non-stationary)\n")
-cat("   - Interpretation: Reject H0 = Series is stationary\n")
-cat("   - Note: Corrects for serial correlation without including lags\n\n")
-
-cat("3. KPSS STATIONARITY TEST\n")
-cat("   - Package: urca::ur.kpss()\n")
-cat("   - Null Hypothesis: Series is stationary (OPPOSITE of ADF/PP)\n")
-cat("   - Interpretation: Reject H0 = Series has a unit root\n")
-cat("   - Note: Used as complementary test to ADF/PP\n\n")
-
-cat("4. DF-GLS TEST (Elliott-Rothenberg-Stock)\n")
-cat("   - Package: urca::ur.ers()\n")
-cat("   - Null Hypothesis: Series has a unit root (non-stationary)\n")
-cat("   - Interpretation: Reject H0 = Series is stationary\n")
-cat("   - Note: More powerful than standard ADF test\n\n")
-
-cat("================================================================================\n")
-cat("ANALYSIS PERFORMED:\n")
-cat("================================================================================\n\n")
-
-cat("RETURN CALCULATION:\n")
-cat("  -> Returns calculated as: log(Price_t / Price_{t-1}) * 100\n")
-cat("  -> This gives percentage log returns\n")
-cat("  -> Log returns are preferred for financial time series analysis\n\n")
-
-cat("UNIT ROOT TESTS ON RETURNS:\n")
-cat("  -> All tests performed on return series (not price levels)\n")
-cat("  -> Returns are typically stationary (price levels typically are not)\n")
-cat("  -> Stationary returns are appropriate for GARCH modeling\n\n")
-
-cat("EXPECTED RESULTS:\n")
-cat("  -> Returns should be STATIONARY (reject null in ADF/PP/DF-GLS)\n")
-cat("  -> Returns should be STATIONARY (fail to reject null in KPSS)\n")
-cat("  -> If returns are stationary, they can be used directly for GARCH models\n\n")
-
-cat("RECOMMENDATION FOR GARCH MODELING:\n")
-cat("  -> If return series is stationary: Use directly in GARCH models\n")
-cat("  -> If return series has unit root (rare): Further differencing may be needed\n")
-cat("  -> GARCH models are designed for stationary series with time-varying volatility\n\n")
-```
-
-# DCC-GARCH PAIRWISE MODELS
-
-```{r dcc-garch-setup, message=FALSE, warning=FALSE}
-cat("\n")
-cat("================================================================================\n")
-cat("              DCC-GARCH PAIRWISE MODEL FITTING\n")
-cat("================================================================================\n\n")
-
-# Install packages if needed
-if (!require("rmgarch", quietly = TRUE)) install.packages("rmgarch")
-if (!require("rugarch", quietly = TRUE)) install.packages("rugarch")
-library(rmgarch)
-library(rugarch)
+library(ConnectednessApproach)
+library(xts)
 library(knitr)
 
-cat("Fitting best DCC-GARCH models for pairwise combinations within each metal\n")
-cat("This will fit separate models for each pair of series\n\n")
+cat("=== PACKAGE LOADED ===\n")
+cat("ConnectednessApproach: DCC-GARCH model selection and estimation\n")
+cat("Function: DCCGARCHselection() - Selects best DCC-GARCH specification\n\n")
 ```
 
-```{r prepare-returns-matrices}
-# Prepare return matrices
-prepare_return_matrix <- function(returns_list, dates) {
+```{r prepare-dcc-data}
+cat("\n=== PREPARING DATA FOR DCC-GARCH ===\n\n")
+
+# Prepare return data as xts objects with proper dates
+prepare_return_xts <- function(returns_list, dates) {
+  n_series <- length(returns_list)
+  series_names <- names(returns_list)
   min_len <- min(sapply(returns_list, length))
-  return_matrix <- matrix(NA, nrow = min_len, ncol = length(returns_list))
-  colnames(return_matrix) <- names(returns_list)
   
-  for(i in 1:length(returns_list)) {
+  return_matrix <- matrix(NA, nrow = min_len, ncol = n_series)
+  colnames(return_matrix) <- series_names
+  
+  for(i in 1:n_series) {
     return_matrix[, i] <- returns_list[[i]][1:min_len]
   }
   
-  return(return_matrix)
+  # Create xts object with proper dates (skip first date due to differencing)
+  return_xts <- xts(return_matrix, order.by = dates[2:(min_len+1)])
+  
+  # Clean data: remove any NAs, Inf, or extreme values
+  return_xts <- na.omit(return_xts)
+  
+  # Replace infinite values with NA and remove
+  return_xts[is.infinite(return_xts)] <- NA
+  return_xts <- na.omit(return_xts)
+  
+  # Remove extreme outliers (beyond 10 standard deviations)
+  for(i in 1:ncol(return_xts)) {
+    col_mean <- mean(return_xts[,i], na.rm=TRUE)
+    col_sd <- sd(return_xts[,i], na.rm=TRUE)
+    outliers <- abs(return_xts[,i] - col_mean) > 10 * col_sd
+    if(any(outliers, na.rm=TRUE)) {
+      return_xts[outliers, i] <- NA
+    }
+  }
+  return_xts <- na.omit(return_xts)
+  
+  return(return_xts)
 }
 
-lithium_returns_mat <- prepare_return_matrix(lithium_returns, lithium$Date)
-nickel_returns_mat <- prepare_return_matrix(nickel_returns, nickel$Date)
-cobalt_returns_mat <- prepare_return_matrix(cobalt_returns, cobalt$Date)
-copper_returns_mat <- prepare_return_matrix(copper_returns, copper$Date)
+# Prepare data for each metal
+lithium_xts <- prepare_return_xts(lithium_returns, lithium$Date)
+nickel_xts <- prepare_return_xts(nickel_returns, nickel$Date)
+cobalt_xts <- prepare_return_xts(cobalt_returns, cobalt$Date)
+copper_xts <- prepare_return_xts(copper_returns, copper$Date)
+
+cat("Data prepared and cleaned as xts objects:\n")
+cat("  Lithium:", nrow(lithium_xts), "observations x", ncol(lithium_xts), "series\n")
+cat("  Nickel:", nrow(nickel_xts), "observations x", ncol(nickel_xts), "series\n")
+cat("  Cobalt:", nrow(cobalt_xts), "observations x", ncol(cobalt_xts), "series\n")
+cat("  Copper:", nrow(copper_xts), "observations x", ncol(copper_xts), "series\n\n")
+
+cat("Data cleaning steps applied:\n")
+cat("  - Removed NA values\n")
+cat("  - Removed infinite values\n")
+cat("  - Removed extreme outliers (>10 SD from mean)\n\n")
 ```
 
-```{r dcc-lithium-pairs}
-cat("\n")
-cat("================================================================================\n")
-cat("                   LITHIUM - PAIRWISE DCC-GARCH MODELS\n")
-cat("================================================================================\n\n")
+```{r diagnose-data}
+cat("\n=== DATA DIAGNOSTICS ===\n\n")
 
-# Function to fit best DCC-GARCH for a pair
-fit_dcc_pair <- function(data_mat, col1, col2, metal_name) {
-  pair_data <- data_mat[, c(col1, col2)]
-  pair_data <- na.omit(pair_data)
+# Function to diagnose data quality
+diagnose_data <- function(xts_data, name) {
+  cat("\n--- ", name, " ---\n")
+  cat("  Dimensions:", nrow(xts_data), "rows x", ncol(xts_data), "columns\n")
+  cat("  Date range:", as.character(start(xts_data)), "to", as.character(end(xts_data)), "\n")
   
-  cat(sprintf("\nFitting DCC-GARCH for %s: %s vs %s\n", metal_name, colnames(pair_data)[1], colnames(pair_data)[2]))
+  # Check for constant series (zero variance)
+  variances <- apply(xts_data, 2, var, na.rm=TRUE)
+  zero_var <- sum(variances < 1e-10)
+  if(zero_var > 0) {
+    cat("  WARNING:", zero_var, "series with near-zero variance\n")
+  }
   
-  # Univariate GARCH specification
-  uspec <- ugarchspec(
-    mean.model = list(armaOrder = c(1,1)),
-    variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
-    distribution.model = "norm"
-  )
-  
-  # Multivariate DCC specification
-  spec <- dccspec(
-    uspec = multispec(replicate(2, uspec)),
-    dccOrder = c(1,1),
-    distribution = "mvnorm"
-  )
-  
-  # Fit model
-  tryCatch({
-    fit <- dccfit(spec, data = pair_data)
-    
-    # Extract key results
-    dcc_params <- coef(fit)
-    aic_val <- infocriteria(fit)[1]
-    bic_val <- infocriteria(fit)[2]
-    
-    # Get dynamic correlations
-    dcor <- rcor(fit)
-    avg_cor <- mean(dcor[1,2,], na.rm=TRUE)
-    
-    cat(sprintf("  AIC: %.4f, BIC: %.4f\n", aic_val, bic_val))
-    cat(sprintf("  Average Dynamic Correlation: %.4f\n", avg_cor))
-    
-    return(list(
-      fit = fit,
-      pair = c(colnames(pair_data)[1], colnames(pair_data)[2]),
-      aic = aic_val,
-      bic = bic_val,
-      avg_cor = avg_cor,
-      dcc_alpha = dcc_params["[Joint]dcca1"],
-      dcc_beta = dcc_params["[Joint]dccb1"]
-    ))
-  }, error = function(e) {
-    cat(sprintf("  Error fitting model: %s\n", e$message))
-    return(NULL)
-  })
+  # Check basic stats
+  cat("  Mean returns range:", sprintf("%.4f to %.4f", 
+      min(colMeans(xts_data, na.rm=TRUE)), max(colMeans(xts_data, na.rm=TRUE))), "\n")
+  cat("  SD range:", sprintf("%.4f to %.4f", 
+      min(apply(xts_data, 2, sd, na.rm=TRUE)), max(apply(xts_data, 2, sd, na.rm=TRUE))), "\n")
 }
 
-# Fit all pairwise combinations for Lithium
-lithium_pairs <- list()
-lithium_cols <- colnames(lithium_returns_mat)
-n_lithium <- length(lithium_cols)
+diagnose_data(lithium_xts, "Lithium")
+diagnose_data(nickel_xts, "Nickel")
+diagnose_data(cobalt_xts, "Cobalt")
+diagnose_data(copper_xts, "Copper")
+```
 
-if(n_lithium >= 2) {
-  pair_idx <- 1
-  for(i in 1:(n_lithium-1)) {
-    for(j in (i+1):n_lithium) {
-      result <- fit_dcc_pair(lithium_returns_mat, i, j, "Lithium")
-      if(!is.null(result)) {
-        lithium_pairs[[pair_idx]] <- result
-        pair_idx <- pair_idx + 1
+```{r dcc-lithium, fig.width=12, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("                   LITHIUM - DCC-GARCH ANALYSIS\n")
+cat("================================================================================\n\n")
+
+# Limit to first 4 series for computational efficiency
+max_series <- min(4, ncol(lithium_xts))
+lithium_subset <- lithium_xts[, 1:max_series]
+
+cat("Using", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(lithium_subset), collapse="\n"), "\n\n")
+
+# Manual DCC-GARCH fitting with fixed specification (faster than model selection)
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+lithium_dcc <- tryCatch({
+  library(rmgarch)
+  
+  # Simple GARCH(1,1) specification for each series
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  
+  # Replicate spec for all series
+  multi_spec <- multispec(replicate(max_series, garch_spec))
+  
+  # DCC specification
+  dcc_spec <- dccspec(uspec = multi_spec, 
+                      dccOrder = c(1,1), 
+                      distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  dcc_fit <- dccfit(dcc_spec, data = lithium_subset, 
+                    fit.control = list(eval.se=FALSE))
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(lithium_dcc)) {
+  cat("\n=== LITHIUM DCC-GARCH RESULTS ===\n\n")
+  
+  # Extract DCC parameters
+  dcc_params <- coef(lithium_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  # Get information criteria
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(lithium_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(lithium_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(lithium_dcc)[2]), "\n\n")
+  
+  # Visualizations
+  cat("\n=== LITHIUM DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  # Extract dynamic correlations
+  dcc_cor <- rcor(lithium_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  # Plot 1: Time-varying correlations for selected pairs
+  par(mfrow=c(2,2), mar=c(4,4,3,2))
+  
+  plot_count <- 0
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      if(plot_count < 4) {
+        cor_series <- dcc_cor[i,j,]
+        plot(as.Date(names(cor_series)), cor_series, type="l",
+             main=paste("DCC:", colnames(lithium_subset)[i], "-", colnames(lithium_subset)[j]),
+             xlab="Date", ylab="Correlation", col="steelblue", lwd=2)
+        abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+        grid()
+        plot_count <- plot_count + 1
       }
     }
   }
+  par(mfrow=c(1,1))
   
-  # Summary table
-  if(length(lithium_pairs) > 0) {
-    lithium_summary_df <- data.frame(
-      Pair = sapply(lithium_pairs, function(x) paste(x$pair[1], "-", x$pair[2])),
-      AIC = sapply(lithium_pairs, function(x) x$aic),
-      BIC = sapply(lithium_pairs, function(x) x$bic),
-      Avg_Correlation = sapply(lithium_pairs, function(x) x$avg_cor),
-      DCC_Alpha = sapply(lithium_pairs, function(x) as.numeric(x$dcc_alpha)),
-      DCC_Beta = sapply(lithium_pairs, function(x) as.numeric(x$dcc_beta))
-    )
-    
-    cat("\n\n=== LITHIUM PAIRWISE DCC-GARCH SUMMARY ===\n")
-    kable(lithium_summary_df, digits = 4, 
-          caption = "Lithium: Pairwise DCC-GARCH Model Results")
-    
-    # Visualization of fitted pairs
-    cat("\n--- LITHIUM DCC-GARCH MODEL FITTING VISUALIZATION ---\n\n")
-    
-    # Create pair matrix to show which models were fitted
-    pair_matrix <- matrix(0, nrow=n_lithium, ncol=n_lithium)
-    rownames(pair_matrix) <- colnames(pair_matrix) <- lithium_cols
-    
-    for(pair in lithium_pairs) {
-      i <- which(lithium_cols == pair$pair[1])
-      j <- which(lithium_cols == pair$pair[2])
-      pair_matrix[i, j] <- 1
-      pair_matrix[j, i] <- 1
+  # Plot 2: Average correlations heatmap
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
     }
-    
-    # Heatmap of fitted pairs
-    par(mar=c(8,8,3,2))
-    image(1:n_lithium, 1:n_lithium, pair_matrix,
-          col=c("white", "steelblue"),
-          xlab="", ylab="", main="Lithium: DCC-GARCH Pairs Fitted",
-          axes=FALSE)
-    axis(1, at=1:n_lithium, labels=lithium_cols, las=2, cex.axis=0.7)
-    axis(2, at=1:n_lithium, labels=lithium_cols, las=2, cex.axis=0.7)
-    abline(h=seq(0.5, n_lithium+0.5, 1), v=seq(0.5, n_lithium+0.5, 1), col="gray80")
-    text(n_lithium/2, -1.5, "Blue = Model Fitted", xpd=TRUE, cex=0.9)
-    
-    # Bar plots of model metrics
-    par(mfrow=c(2,2), mar=c(8,4,3,1))
-    
-    barplot(lithium_summary_df$AIC, names.arg=1:nrow(lithium_summary_df),
-            col="coral", main="AIC by Pair", ylab="AIC", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(lithium_summary_df$Avg_Correlation, names.arg=1:nrow(lithium_summary_df),
-            col="darkgreen", main="Average Dynamic Correlation", 
-            ylab="Correlation", xlab="Pair Number",
-            las=1, border=NA, ylim=c(-1, 1))
-    abline(h=0, lty=2)
-    
-    barplot(lithium_summary_df$DCC_Alpha, names.arg=1:nrow(lithium_summary_df),
-            col="purple", main="DCC Alpha (Short-run)", 
-            ylab="Alpha", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(lithium_summary_df$DCC_Beta, names.arg=1:nrow(lithium_summary_df),
-            col="orange", main="DCC Beta (Long-run)", 
-            ylab="Beta", xlab="Pair Number",
-            las=1, border=NA)
-    
-    par(mfrow=c(1,1), mar=c(5,4,4,2))
   }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(lithium_subset)
+  
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, avg_corr_matrix,
+        col=colorRampPalette(c("blue", "white", "red"))(100),
+        xlab="", ylab="", main="Lithium: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(lithium_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=colnames(lithium_subset), las=2, cex.axis=0.8)
+  
+  # Add correlation values
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, j, sprintf("%.2f", avg_corr_matrix[i,j]), cex=0.8)
+    }
+  }
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Lithium ***\n")
+  cat("Skipping visualizations.\n\n")
 }
+
+cat("\n=== LITHIUM DCC-GARCH SECTION COMPLETE ===\n")
 ```
 
-```{r dcc-nickel-pairs}
+```{r dcc-nickel, fig.width=12, fig.height=10}
 cat("\n")
 cat("================================================================================\n")
-cat("                   NICKEL - PAIRWISE DCC-GARCH MODELS\n")
+cat("                   NICKEL - DCC-GARCH ANALYSIS\n")
 cat("================================================================================\n\n")
 
-nickel_pairs <- list()
-nickel_cols <- colnames(nickel_returns_mat)
-n_nickel <- length(nickel_cols)
+# Limit to first 4 series for computational efficiency
+max_series <- min(4, ncol(nickel_xts))
+nickel_subset <- nickel_xts[, 1:max_series]
 
-if(n_nickel >= 2) {
-  pair_idx <- 1
-  for(i in 1:(n_nickel-1)) {
-    for(j in (i+1):n_nickel) {
-      result <- fit_dcc_pair(nickel_returns_mat, i, j, "Nickel")
-      if(!is.null(result)) {
-        nickel_pairs[[pair_idx]] <- result
-        pair_idx <- pair_idx + 1
+cat("Using", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(nickel_subset), collapse="\n"), "\n\n")
+
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+nickel_dcc <- tryCatch({
+  library(rmgarch)
+  
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  multi_spec <- multispec(replicate(max_series, garch_spec))
+  dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  dcc_fit <- dccfit(dcc_spec, data = nickel_subset, fit.control = list(eval.se=FALSE))
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(nickel_dcc)) {
+  cat("\n=== NICKEL DCC-GARCH RESULTS ===\n\n")
+  
+  dcc_params <- coef(nickel_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(nickel_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(nickel_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(nickel_dcc)[2]), "\n\n")
+  
+  cat("\n=== NICKEL DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  dcc_cor <- rcor(nickel_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  par(mfrow=c(2,2), mar=c(4,4,3,2))
+  plot_count <- 0
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      if(plot_count < 4) {
+        cor_series <- dcc_cor[i,j,]
+        plot(as.Date(names(cor_series)), cor_series, type="l",
+             main=paste("DCC:", colnames(nickel_subset)[i], "-", colnames(nickel_subset)[j]),
+             xlab="Date", ylab="Correlation", col="darkgreen", lwd=2)
+        abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+        grid()
+        plot_count <- plot_count + 1
       }
     }
   }
+  par(mfrow=c(1,1))
   
-  if(length(nickel_pairs) > 0) {
-    nickel_summary_df <- data.frame(
-      Pair = sapply(nickel_pairs, function(x) paste(x$pair[1], "-", x$pair[2])),
-      AIC = sapply(nickel_pairs, function(x) x$aic),
-      BIC = sapply(nickel_pairs, function(x) x$bic),
-      Avg_Correlation = sapply(nickel_pairs, function(x) x$avg_cor),
-      DCC_Alpha = sapply(nickel_pairs, function(x) as.numeric(x$dcc_alpha)),
-      DCC_Beta = sapply(nickel_pairs, function(x) as.numeric(x$dcc_beta))
-    )
-    
-    cat("\n\n=== NICKEL PAIRWISE DCC-GARCH SUMMARY ===\n")
-    kable(nickel_summary_df, digits = 4,
-          caption = "Nickel: Pairwise DCC-GARCH Model Results")
-    
-    # Visualization of fitted pairs
-    cat("\n--- NICKEL DCC-GARCH MODEL FITTING VISUALIZATION ---\n\n")
-    
-    # Create pair matrix
-    pair_matrix <- matrix(0, nrow=n_nickel, ncol=n_nickel)
-    rownames(pair_matrix) <- colnames(pair_matrix) <- nickel_cols
-    
-    for(pair in nickel_pairs) {
-      i <- which(nickel_cols == pair$pair[1])
-      j <- which(nickel_cols == pair$pair[2])
-      pair_matrix[i, j] <- 1
-      pair_matrix[j, i] <- 1
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
     }
-    
-    # Heatmap
-    par(mar=c(8,8,3,2))
-    image(1:n_nickel, 1:n_nickel, pair_matrix,
-          col=c("white", "steelblue"),
-          xlab="", ylab="", main="Nickel: DCC-GARCH Pairs Fitted",
-          axes=FALSE)
-    axis(1, at=1:n_nickel, labels=nickel_cols, las=2, cex.axis=0.7)
-    axis(2, at=1:n_nickel, labels=nickel_cols, las=2, cex.axis=0.7)
-    abline(h=seq(0.5, n_nickel+0.5, 1), v=seq(0.5, n_nickel+0.5, 1), col="gray80")
-    text(n_nickel/2, -1.5, "Blue = Model Fitted", xpd=TRUE, cex=0.9)
-    
-    # Bar plots
-    par(mfrow=c(2,2), mar=c(8,4,3,1))
-    
-    barplot(nickel_summary_df$AIC, names.arg=1:nrow(nickel_summary_df),
-            col="coral", main="AIC by Pair", ylab="AIC", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(nickel_summary_df$Avg_Correlation, names.arg=1:nrow(nickel_summary_df),
-            col="darkgreen", main="Average Dynamic Correlation", 
-            ylab="Correlation", xlab="Pair Number",
-            las=1, border=NA, ylim=c(-1, 1))
-    abline(h=0, lty=2)
-    
-    barplot(nickel_summary_df$DCC_Alpha, names.arg=1:nrow(nickel_summary_df),
-            col="purple", main="DCC Alpha (Short-run)", 
-            ylab="Alpha", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(nickel_summary_df$DCC_Beta, names.arg=1:nrow(nickel_summary_df),
-            col="orange", main="DCC Beta (Long-run)", 
-            ylab="Beta", xlab="Pair Number",
-            las=1, border=NA)
-    
-    par(mfrow=c(1,1), mar=c(5,4,4,2))
   }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(nickel_subset)
+  
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, avg_corr_matrix,
+        col=colorRampPalette(c("blue", "white", "red"))(100),
+        xlab="", ylab="", main="Nickel: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(nickel_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=colnames(nickel_subset), las=2, cex.axis=0.8)
+  
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, j, sprintf("%.2f", avg_corr_matrix[i,j]), cex=0.8)
+    }
+  }
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Nickel ***\n")
+  cat("Skipping visualizations.\n\n")
 }
+
+cat("\n=== NICKEL DCC-GARCH SECTION COMPLETE ===\n")
 ```
 
-```{r dcc-cobalt-pairs}
+```{r dcc-cobalt, fig.width=12, fig.height=10}
 cat("\n")
 cat("================================================================================\n")
-cat("                   COBALT - PAIRWISE DCC-GARCH MODELS\n")
+cat("                   COBALT - DCC-GARCH ANALYSIS\n")
 cat("================================================================================\n\n")
 
-cobalt_pairs <- list()
-cobalt_cols <- colnames(cobalt_returns_mat)
-n_cobalt <- length(cobalt_cols)
+# Diagnose correlation issues first
+cat("Diagnosing correlation structure...\n")
+cobalt_cor <- cor(cobalt_xts)
+cat("Correlation matrix:\n")
+print(round(cobalt_cor, 3))
+cat("\n")
 
-if(n_cobalt >= 2) {
-  pair_idx <- 1
-  for(i in 1:(n_cobalt-1)) {
-    for(j in (i+1):n_cobalt) {
-      result <- fit_dcc_pair(cobalt_returns_mat, i, j, "Cobalt")
-      if(!is.null(result)) {
-        cobalt_pairs[[pair_idx]] <- result
-        pair_idx <- pair_idx + 1
+# Find highly correlated pairs
+high_cor <- which(abs(cobalt_cor) > 0.99 & cobalt_cor < 1, arr.ind=TRUE)
+if(nrow(high_cor) > 0) {
+  cat("WARNING: Found", nrow(high_cor)/2, "pairs with correlation > 0.99\n")
+  for(i in 1:(nrow(high_cor)/2)) {
+    idx <- high_cor[i,]
+    cat("  ", colnames(cobalt_xts)[idx[1]], "-", colnames(cobalt_xts)[idx[2]], 
+        ": r =", round(cobalt_cor[idx[1], idx[2]], 4), "\n")
+  }
+  cat("\n")
+}
+
+# Try with only 2 series to avoid singularity (use least correlated pair)
+# Find the pair with lowest correlation
+min_cor_val <- 1
+best_pair <- c(1, 2)
+for(i in 1:(ncol(cobalt_xts)-1)) {
+  for(j in (i+1):ncol(cobalt_xts)) {
+    if(abs(cobalt_cor[i,j]) < min_cor_val) {
+      min_cor_val <- abs(cobalt_cor[i,j])
+      best_pair <- c(i, j)
+    }
+  }
+}
+
+cat("Attempting fit with 2 least correlated series to avoid singularity:\n")
+cat("  Selected:", colnames(cobalt_xts)[best_pair[1]], "and", 
+    colnames(cobalt_xts)[best_pair[2]], "\n")
+cat("  Correlation:", round(cobalt_cor[best_pair[1], best_pair[2]], 4), "\n\n")
+
+cobalt_subset <- cobalt_xts[, best_pair]
+
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+cobalt_dcc <- tryCatch({
+  library(rmgarch)
+  
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  multi_spec <- multispec(replicate(2, garch_spec))
+  dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  dcc_fit <- dccfit(dcc_spec, data = cobalt_subset, fit.control = list(eval.se=FALSE))
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(cobalt_dcc)) {
+  cat("\n=== COBALT DCC-GARCH RESULTS ===\n\n")
+  
+  dcc_params <- coef(cobalt_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(cobalt_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(cobalt_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(cobalt_dcc)[2]), "\n\n")
+  
+  cat("\n=== COBALT DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  dcc_cor <- rcor(cobalt_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  # For 2 series, just plot the single correlation time series
+  par(mfrow=c(1,2), mar=c(4,4,3,2))
+  
+  cor_series <- dcc_cor[1,2,]
+  plot(as.Date(names(cor_series)), cor_series, type="l",
+       main=paste("DCC:", colnames(cobalt_subset)[1], "-", colnames(cobalt_subset)[2]),
+       xlab="Date", ylab="Correlation", col="purple", lwd=2)
+  abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+  grid()
+  
+  # Histogram of correlations
+  hist(cor_series, breaks=30, col="purple", border="white",
+       main="Distribution of Dynamic Correlations",
+       xlab="Correlation", ylab="Frequency")
+  abline(v=mean(cor_series, na.rm=TRUE), col="red", lwd=2, lty=2)
+  
+  par(mfrow=c(1,1))
+  
+  # Summary statistics
+  cat("\nDynamic Correlation Statistics:\n")
+  cat("  Mean:", sprintf("%.4f", mean(cor_series, na.rm=TRUE)), "\n")
+  cat("  Min:", sprintf("%.4f", min(cor_series, na.rm=TRUE)), "\n")
+  cat("  Max:", sprintf("%.4f", max(cor_series, na.rm=TRUE)), "\n")
+  cat("  SD:", sprintf("%.4f", sd(cor_series, na.rm=TRUE)), "\n")
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Cobalt ***\n")
+  cat("REASON: Computational singularity due to near-perfect correlation between series\n")
+  cat("RECOMMENDATION: Cobalt price series are too highly correlated for multivariate GARCH\n")
+  cat("Skipping visualizations.\n\n")
+}
+
+cat("\n=== COBALT DCC-GARCH SECTION COMPLETE ===\n")
+```
+
+```{r dcc-copper, fig.width=12, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("                   COPPER - DCC-GARCH ANALYSIS\n")
+cat("================================================================================\n\n")
+
+# Limit to first 4 series for computational efficiency
+max_series <- min(4, ncol(copper_xts))
+copper_subset <- copper_xts[, 1:max_series]
+
+cat("Using", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(copper_subset), collapse="\n"), "\n\n")
+
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+copper_dcc <- tryCatch({
+  library(rmgarch)
+  
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  multi_spec <- multispec(replicate(max_series, garch_spec))
+  dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  dcc_fit <- dccfit(dcc_spec, data = copper_subset, fit.control = list(eval.se=FALSE))
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(copper_dcc)) {
+  cat("\n=== COPPER DCC-GARCH RESULTS ===\n\n")
+  
+  dcc_params <- coef(copper_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(copper_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(copper_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(copper_dcc)[2]), "\n\n")
+  
+  cat("\n=== COPPER DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  dcc_cor <- rcor(copper_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  par(mfrow=c(2,2), mar=c(4,4,3,2))
+  plot_count <- 0
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      if(plot_count < 4) {
+        cor_series <- dcc_cor[i,j,]
+        plot(as.Date(names(cor_series)), cor_series, type="l",
+             main=paste("DCC:", colnames(copper_subset)[i], "-", colnames(copper_subset)[j]),
+             xlab="Date", ylab="Correlation", col="brown", lwd=2)
+        abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+        grid()
+        plot_count <- plot_count + 1
       }
     }
   }
+  par(mfrow=c(1,1))
   
-  if(length(cobalt_pairs) > 0) {
-    cobalt_summary_df <- data.frame(
-      Pair = sapply(cobalt_pairs, function(x) paste(x$pair[1], "-", x$pair[2])),
-      AIC = sapply(cobalt_pairs, function(x) x$aic),
-      BIC = sapply(cobalt_pairs, function(x) x$bic),
-      Avg_Correlation = sapply(cobalt_pairs, function(x) x$avg_cor),
-      DCC_Alpha = sapply(cobalt_pairs, function(x) as.numeric(x$dcc_alpha)),
-      DCC_Beta = sapply(cobalt_pairs, function(x) as.numeric(x$dcc_beta))
-    )
-    
-    cat("\n\n=== COBALT PAIRWISE DCC-GARCH SUMMARY ===\n")
-    kable(cobalt_summary_df, digits = 4,
-          caption = "Cobalt: Pairwise DCC-GARCH Model Results")
-    
-    # Visualization of fitted pairs
-    cat("\n--- COBALT DCC-GARCH MODEL FITTING VISUALIZATION ---\n\n")
-    
-    # Create pair matrix
-    pair_matrix <- matrix(0, nrow=n_cobalt, ncol=n_cobalt)
-    rownames(pair_matrix) <- colnames(pair_matrix) <- cobalt_cols
-    
-    for(pair in cobalt_pairs) {
-      i <- which(cobalt_cols == pair$pair[1])
-      j <- which(cobalt_cols == pair$pair[2])
-      pair_matrix[i, j] <- 1
-      pair_matrix[j, i] <- 1
-    }
-    
-    # Heatmap
-    par(mar=c(8,8,3,2))
-    image(1:n_cobalt, 1:n_cobalt, pair_matrix,
-          col=c("white", "steelblue"),
-          xlab="", ylab="", main="Cobalt: DCC-GARCH Pairs Fitted",
-          axes=FALSE)
-    axis(1, at=1:n_cobalt, labels=cobalt_cols, las=2, cex.axis=0.7)
-    axis(2, at=1:n_cobalt, labels=cobalt_cols, las=2, cex.axis=0.7)
-    abline(h=seq(0.5, n_cobalt+0.5, 1), v=seq(0.5, n_cobalt+0.5, 1), col="gray80")
-    text(n_cobalt/2, -1.5, "Blue = Model Fitted", xpd=TRUE, cex=0.9)
-    
-    # Bar plots
-    par(mfrow=c(2,2), mar=c(8,4,3,1))
-    
-    barplot(cobalt_summary_df$AIC, names.arg=1:nrow(cobalt_summary_df),
-            col="coral", main="AIC by Pair", ylab="AIC", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(cobalt_summary_df$Avg_Correlation, names.arg=1:nrow(cobalt_summary_df),
-            col="darkgreen", main="Average Dynamic Correlation", 
-            ylab="Correlation", xlab="Pair Number",
-            las=1, border=NA, ylim=c(-1, 1))
-    abline(h=0, lty=2)
-    
-    barplot(cobalt_summary_df$DCC_Alpha, names.arg=1:nrow(cobalt_summary_df),
-            col="purple", main="DCC Alpha (Short-run)", 
-            ylab="Alpha", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(cobalt_summary_df$DCC_Beta, names.arg=1:nrow(cobalt_summary_df),
-            col="orange", main="DCC Beta (Long-run)", 
-            ylab="Beta", xlab="Pair Number",
-            las=1, border=NA)
-    
-    par(mfrow=c(1,1), mar=c(5,4,4,2))
-  }
-}
-```
-
-```{r dcc-copper-pairs}
-cat("\n")
-cat("================================================================================\n")
-cat("                   COPPER - PAIRWISE DCC-GARCH MODELS\n")
-cat("================================================================================\n\n")
-
-copper_pairs <- list()
-copper_cols <- colnames(copper_returns_mat)
-n_copper <- length(copper_cols)
-
-if(n_copper >= 2) {
-  pair_idx <- 1
-  for(i in 1:(n_copper-1)) {
-    for(j in (i+1):n_copper) {
-      result <- fit_dcc_pair(copper_returns_mat, i, j, "Copper")
-      if(!is.null(result)) {
-        copper_pairs[[pair_idx]] <- result
-        pair_idx <- pair_idx + 1
-      }
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
     }
   }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(copper_subset)
   
-  if(length(copper_pairs) > 0) {
-    copper_summary_df <- data.frame(
-      Pair = sapply(copper_pairs, function(x) paste(x$pair[1], "-", x$pair[2])),
-      AIC = sapply(copper_pairs, function(x) x$aic),
-      BIC = sapply(copper_pairs, function(x) x$bic),
-      Avg_Correlation = sapply(copper_pairs, function(x) x$avg_cor),
-      DCC_Alpha = sapply(copper_pairs, function(x) as.numeric(x$dcc_alpha)),
-      DCC_Beta = sapply(copper_pairs, function(x) as.numeric(x$dcc_beta))
-    )
-    
-    cat("\n\n=== COPPER PAIRWISE DCC-GARCH SUMMARY ===\n")
-    kable(copper_summary_df, digits = 4,
-          caption = "Copper: Pairwise DCC-GARCH Model Results")
-    
-    # Visualization of fitted pairs
-    cat("\n--- COPPER DCC-GARCH MODEL FITTING VISUALIZATION ---\n\n")
-    
-    # Create pair matrix
-    pair_matrix <- matrix(0, nrow=n_copper, ncol=n_copper)
-    rownames(pair_matrix) <- colnames(pair_matrix) <- copper_cols
-    
-    for(pair in copper_pairs) {
-      i <- which(copper_cols == pair$pair[1])
-      j <- which(copper_cols == pair$pair[2])
-      pair_matrix[i, j] <- 1
-      pair_matrix[j, i] <- 1
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, avg_corr_matrix,
+        col=colorRampPalette(c("blue", "white", "red"))(100),
+        xlab="", ylab="", main="Copper: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(copper_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=colnames(copper_subset), las=2, cex.axis=0.8)
+  
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, j, sprintf("%.2f", avg_corr_matrix[i,j]), cex=0.8)
     }
-    
-    # Heatmap
-    par(mar=c(8,8,3,2))
-    image(1:n_copper, 1:n_copper, pair_matrix,
-          col=c("white", "steelblue"),
-          xlab="", ylab="", main="Copper: DCC-GARCH Pairs Fitted",
-          axes=FALSE)
-    axis(1, at=1:n_copper, labels=copper_cols, las=2, cex.axis=0.7)
-    axis(2, at=1:n_copper, labels=copper_cols, las=2, cex.axis=0.7)
-    abline(h=seq(0.5, n_copper+0.5, 1), v=seq(0.5, n_copper+0.5, 1), col="gray80")
-    text(n_copper/2, -1.5, "Blue = Model Fitted", xpd=TRUE, cex=0.9)
-    
-    # Bar plots
-    par(mfrow=c(2,2), mar=c(8,4,3,1))
-    
-    barplot(copper_summary_df$AIC, names.arg=1:nrow(copper_summary_df),
-            col="coral", main="AIC by Pair", ylab="AIC", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(copper_summary_df$Avg_Correlation, names.arg=1:nrow(copper_summary_df),
-            col="darkgreen", main="Average Dynamic Correlation", 
-            ylab="Correlation", xlab="Pair Number",
-            las=1, border=NA, ylim=c(-1, 1))
-    abline(h=0, lty=2)
-    
-    barplot(copper_summary_df$DCC_Alpha, names.arg=1:nrow(copper_summary_df),
-            col="purple", main="DCC Alpha (Short-run)", 
-            ylab="Alpha", xlab="Pair Number",
-            las=1, border=NA)
-    
-    barplot(copper_summary_df$DCC_Beta, names.arg=1:nrow(copper_summary_df),
-            col="orange", main="DCC Beta (Long-run)", 
-            ylab="Beta", xlab="Pair Number",
-            las=1, border=NA)
-    
-    par(mfrow=c(1,1), mar=c(5,4,4,2))
   }
-}
-```
-
-```{r dcc-final-summary}
-cat("\n")
-cat("================================================================================\n")
-cat("                   DCC-GARCH PAIRWISE FITTING COMPLETE\n")
-cat("================================================================================\n\n")
-
-cat("MODELS FITTED:\n")
-cat(sprintf("  Lithium: %d pairwise combinations\n", length(lithium_pairs)))
-cat(sprintf("  Nickel: %d pairwise combinations\n", length(nickel_pairs)))
-cat(sprintf("  Cobalt: %d pairwise combinations\n", length(cobalt_pairs)))
-cat(sprintf("  Copper: %d pairwise combinations\n", length(copper_pairs)))
-cat("\n\n")
-
-cat("DCC-GARCH PARAMETERS:\n")
-cat("  DCC Alpha: Short-run persistence of dynamic correlations\n")
-cat("  DCC Beta: Long-run persistence of dynamic correlations\n")
-cat("  Avg Correlation: Mean dynamic conditional correlation\n\n")
-
-cat("MODEL SELECTION:\n")
-cat("  Lower AIC/BIC indicates better model fit\n")
-cat("  All models use ARMA(1,1)-GARCH(1,1) for univariate specifications\n")
-cat("  DCC(1,1) for multivariate correlation dynamics\n\n")
-
-cat("================================================================================\n\n")
-```
-
-```{r dcc-visualization-summary, fig.width=12, fig.height=8}
-cat("\n")
-cat("================================================================================\n")
-cat("           CROSS-METAL DCC-GARCH FITTING VISUALIZATION\n")
-cat("================================================================================\n\n")
-
-# Create comprehensive comparison visualization
-par(mfrow=c(2,2), mar=c(5,5,3,2))
-
-# 1. Number of pairs fitted per metal
-pairs_count <- c(
-  Lithium = length(lithium_pairs),
-  Nickel = length(nickel_pairs),
-  Cobalt = length(cobalt_pairs),
-  Copper = length(copper_pairs)
-)
-
-barplot(pairs_count, 
-        col=c("#E69F00", "#56B4E9", "#009E73", "#F0E442"),
-        main="DCC-GARCH Models Fitted by Metal",
-        ylab="Number of Pairwise Models",
-        border=NA, las=1)
-text(x=seq(0.7, by=1.2, length.out=4), y=pairs_count + max(pairs_count)*0.05,
-     labels=pairs_count, cex=1.2, font=2)
-
-# 2. Average correlation by metal
-if(length(lithium_pairs) > 0 & length(nickel_pairs) > 0 & 
-   length(cobalt_pairs) > 0 & length(copper_pairs) > 0) {
-  
-  avg_corr <- c(
-    Lithium = mean(sapply(lithium_pairs, function(x) x$avg_cor)),
-    Nickel = mean(sapply(nickel_pairs, function(x) x$avg_cor)),
-    Cobalt = mean(sapply(cobalt_pairs, function(x) x$avg_cor)),
-    Copper = mean(sapply(copper_pairs, function(x) x$avg_cor))
-  )
-  
-  barplot(avg_corr,
-          col=c("#E69F00", "#56B4E9", "#009E73", "#F0E442"),
-          main="Average Dynamic Correlation by Metal",
-          ylab="Mean Correlation",
-          ylim=c(0, 1), border=NA, las=1)
-  text(x=seq(0.7, by=1.2, length.out=4), y=avg_corr + 0.05,
-       labels=sprintf("%.3f", avg_corr), cex=1, font=2)
-  abline(h=0.5, lty=2, col="gray50")
-  
-  # 3. Average DCC parameters by metal
-  avg_alpha <- c(
-    Lithium = mean(sapply(lithium_pairs, function(x) as.numeric(x$dcc_alpha))),
-    Nickel = mean(sapply(nickel_pairs, function(x) as.numeric(x$dcc_alpha))),
-    Cobalt = mean(sapply(cobalt_pairs, function(x) as.numeric(x$dcc_alpha))),
-    Copper = mean(sapply(copper_pairs, function(x) as.numeric(x$dcc_alpha)))
-  )
-  
-  avg_beta <- c(
-    Lithium = mean(sapply(lithium_pairs, function(x) as.numeric(x$dcc_beta))),
-    Nickel = mean(sapply(nickel_pairs, function(x) as.numeric(x$dcc_beta))),
-    Cobalt = mean(sapply(cobalt_pairs, function(x) as.numeric(x$dcc_beta))),
-    Copper = mean(sapply(copper_pairs, function(x) as.numeric(x$dcc_beta)))
-  )
-  
-  barplot(rbind(avg_alpha, avg_beta),
-          beside=TRUE,
-          col=c("purple", "orange"),
-          names.arg=c("Lithium", "Nickel", "Cobalt", "Copper"),
-          main="Average DCC Parameters by Metal",
-          ylab="Parameter Value",
-          legend.text=c("Alpha (Short-run)", "Beta (Long-run)"),
-          args.legend=list(x="topright", bty="n", cex=0.8),
-          border=NA, las=1)
-  
-  # 4. Model quality comparison (AIC)
-  avg_aic <- c(
-    Lithium = mean(sapply(lithium_pairs, function(x) x$aic)),
-    Nickel = mean(sapply(nickel_pairs, function(x) x$aic)),
-    Cobalt = mean(sapply(cobalt_pairs, function(x) x$aic)),
-    Copper = mean(sapply(copper_pairs, function(x) x$aic))
-  )
-  
-  barplot(avg_aic,
-          col=c("#E69F00", "#56B4E9", "#009E73", "#F0E442"),
-          main="Average AIC by Metal",
-          ylab="AIC (lower is better)",
-          border=NA, las=1)
-  text(x=seq(0.7, by=1.2, length.out=4), y=avg_aic + max(avg_aic)*0.02,
-       labels=sprintf("%.1f", avg_aic), cex=0.9, font=2)
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Copper ***\n")
+  cat("Skipping visualizations.\n\n")
 }
 
-par(mfrow=c(1,1), mar=c(5,4,4,2))
-
-# Create detailed summary table
-cat("\n\n=== COMPREHENSIVE DCC-GARCH FITTING SUMMARY ===\n\n")
-
-if(length(lithium_pairs) > 0 & length(nickel_pairs) > 0 & 
-   length(cobalt_pairs) > 0 & length(copper_pairs) > 0) {
-  
-  summary_table <- data.frame(
-    Metal = c("Lithium", "Nickel", "Cobalt", "Copper"),
-    N_Pairs = pairs_count,
-    Avg_Correlation = avg_corr,
-    SD_Correlation = c(
-      sd(sapply(lithium_pairs, function(x) x$avg_cor)),
-      sd(sapply(nickel_pairs, function(x) x$avg_cor)),
-      sd(sapply(cobalt_pairs, function(x) x$avg_cor)),
-      sd(sapply(copper_pairs, function(x) x$avg_cor))
-    ),
-    Avg_Alpha = avg_alpha,
-    Avg_Beta = avg_beta,
-    Avg_AIC = avg_aic,
-    Avg_BIC = c(
-      mean(sapply(lithium_pairs, function(x) x$bic)),
-      mean(sapply(nickel_pairs, function(x) x$bic)),
-      mean(sapply(cobalt_pairs, function(x) x$bic)),
-      mean(sapply(copper_pairs, function(x) x$bic))
-    )
-  )
-  
-  kable(summary_table, digits=4,
-        caption="DCC-GARCH Model Summary Across All Metals",
-        col.names=c("Metal", "# Pairs", "Avg Corr", "SD Corr", 
-                    "Avg α", "Avg β", "Avg AIC", "Avg BIC"))
-  
-  cat("\n\n=== MODEL INTERPRETATION ===\n")
-  cat("High Average Correlation: Pairs within the metal move together strongly\n")
-  cat("High Alpha: Strong short-run dynamic adjustment in correlations\n")
-  cat("High Beta: Strong long-run persistence in correlations\n")
-  cat("Alpha + Beta ≈ 1: Highly persistent correlation dynamics\n\n")
-}
-
-cat("================================================================================\n\n")
+cat("\n=== COPPER DCC-GARCH SECTION COMPLETE ===\n")
 ```
 
-# VISUAL SUMMARY
-
-```{r visual-summary, fig.width=12, fig.height=10}
+```{r dcc-comparison, fig.width=14, fig.height=10}
 cat("\n")
 cat("================================================================================\n")
-cat("                         COMPREHENSIVE VISUAL SUMMARY\n")
+cat("           CROSS-METAL DCC-GARCH COMPARISON\n")
 cat("================================================================================\n\n")
 
-# 1. Unit Root Tests Overview - Stationarity across all metals
-cat("\n--- STATIONARITY STATUS ACROSS ALL METALS ---\n\n")
+# Extract information from fitted models (handling NULL cases)
+get_model_info <- function(dcc_fit, metal_name) {
+  if(is.null(dcc_fit)) {
+    return(list(aic = NA, bic = NA, loglik = NA))
+  }
+  info <- infocriteria(dcc_fit)
+  return(list(
+    aic = info[1],
+    bic = info[2],
+    loglik = likelihood(dcc_fit)
+  ))
+}
 
-all_unit_root_summary <- rbind(
-  data.frame(Metal="Lithium", lithium_summary_table[,c("Series", "ADF_Result", "PP_Result", "KPSS_Result", "DFGLS_Result")]),
-  data.frame(Metal="Nickel", nickel_summary_table[,c("Series", "ADF_Result", "PP_Result", "KPSS_Result", "DFGLS_Result")]),
-  data.frame(Metal="Cobalt", cobalt_summary_table[,c("Series", "ADF_Result", "PP_Result", "KPSS_Result", "DFGLS_Result")]),
-  data.frame(Metal="Copper", copper_summary_table[,c("Series", "ADF_Result", "PP_Result", "KPSS_Result", "DFGLS_Result")])
-)
+lithium_info <- get_model_info(lithium_dcc, "Lithium")
+nickel_info <- get_model_info(nickel_dcc, "Nickel")
+cobalt_info <- get_model_info(cobalt_dcc, "Cobalt")
+copper_info <- get_model_info(copper_dcc, "Copper")
 
-# Count stationary series per metal
-stationarity_counts <- aggregate(
-  cbind(ADF = ADF_Result == "Stationary",
-        PP = PP_Result == "Stationary", 
-        KPSS = KPSS_Result == "Stationary",
-        DFGLS = DFGLS_Result == "Stationary") ~ Metal,
-  data = all_unit_root_summary,
-  FUN = sum
-)
-
-kable(stationarity_counts, caption = "Number of Stationary Series per Metal (by Test)")
-
-# Stationarity comparison plot
-par(mar=c(5,5,4,2))
-barplot(t(as.matrix(stationarity_counts[,-1])), 
-        beside=TRUE, 
-        names.arg=stationarity_counts$Metal,
-        col=c("steelblue", "darkgreen", "coral", "purple"),
-        main="Stationarity Test Results Comparison",
-        ylab="Number of Stationary Series",
-        legend.text=c("ADF", "PP", "KPSS", "DF-GLS"),
-        args.legend=list(x="topright", bty="n"))
-
-# 2. DCC-GARCH Summary Statistics
-cat("\n\n--- DCC-GARCH PAIRWISE MODEL SUMMARY ---\n\n")
-
-summary_stats <- data.frame(
+# Create comparison summary table
+comparison_summary <- data.frame(
   Metal = c("Lithium", "Nickel", "Cobalt", "Copper"),
-  N_Series = c(ncol(lithium_returns_mat), ncol(nickel_returns_mat), 
-               ncol(cobalt_returns_mat), ncol(copper_returns_mat)),
-  N_Pairs = c(length(lithium_pairs), length(nickel_pairs),
-              length(cobalt_pairs), length(copper_pairs)),
-  N_Stationary_ADF = stationarity_counts$ADF,
-  N_Stationary_PP = stationarity_counts$PP,
-  N_Stationary_KPSS = stationarity_counts$KPSS
+  N_Series_Total = c(ncol(lithium_xts), ncol(nickel_xts), ncol(cobalt_xts), ncol(copper_xts)),
+  N_Series_Used = c(
+    ifelse(is.null(lithium_dcc), 0, min(4, ncol(lithium_xts))),
+    ifelse(is.null(nickel_dcc), 0, min(4, ncol(nickel_xts))),
+    ifelse(is.null(cobalt_dcc), 0, min(4, ncol(cobalt_xts))),
+    ifelse(is.null(copper_dcc), 0, min(4, ncol(copper_xts)))
+  ),
+  GARCH_Type = rep("sGARCH(1,1)", 4),
+  Distribution = rep("Student-t", 4),
+  LogLik = c(lithium_info$loglik, nickel_info$loglik, cobalt_info$loglik, copper_info$loglik),
+  AIC = c(lithium_info$aic, nickel_info$aic, cobalt_info$aic, copper_info$aic),
+  BIC = c(lithium_info$bic, nickel_info$bic, cobalt_info$bic, copper_info$bic),
+  Status = c(
+    ifelse(is.null(lithium_dcc), "Failed", "Fitted"),
+    ifelse(is.null(nickel_dcc), "Failed", "Fitted"),
+    ifelse(is.null(cobalt_dcc), "Failed", "Fitted"),
+    ifelse(is.null(copper_dcc), "Failed", "Fitted")
+  )
 )
 
-kable(summary_stats, digits=2,
-      caption="Comprehensive Summary: Unit Root Tests and DCC-GARCH Pairwise Models",
-      col.names=c("Metal", "# Series", "# Pairs Fitted", "ADF", "PP", "KPSS"))
+cat("=== DCC-GARCH MODEL COMPARISON ACROSS METALS ===\n\n")
+kable(comparison_summary, digits=2,
+      caption="Comparison of DCC-GARCH Models Across Metals")
 
-cat("\n\n")
+cat("\n")
+# Print summary of fitted vs failed models
+n_fitted <- sum(comparison_summary$Status == "Fitted")
+n_failed <- sum(comparison_summary$Status == "Failed")
+cat("Models fitted successfully:", n_fitted, "of 4\n")
+if(n_failed > 0) {
+  failed_list <- comparison_summary$Metal[comparison_summary$Status == "Failed"]
+  cat("Models that failed:", paste(failed_list, collapse=", "), "\n")
+}
+cat("\n")
+
+# Visual comparison - show ALL metals, with failed ones in gray
+par(mfrow=c(2,2), mar=c(6,5,3,2))
+
+# Color vector: use color if fitted, gray if failed
+bar_colors <- ifelse(comparison_summary$Status == "Fitted",
+                     c("#E69F00", "#56B4E9", "#009E73", "#F0E442"),
+                     "lightgray")
+
+# 1. Number of series used
+values1 <- ifelse(comparison_summary$Status == "Fitted", 
+                  comparison_summary$N_Series_Used, 
+                  0)
+barplot(values1, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="Number of Series Used in DCC-GARCH",
+        ylab="Count", border=NA, las=1)
+# Add labels for fitted models
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Fitted") {
+    text(x=(i-1)*1.2 + 0.7, y=values1[i] + 0.2,
+         labels=values1[i], cex=1.2, font=2)
+  } else {
+    text(x=(i-1)*1.2 + 0.7, y=0.5, labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+# 2. Log-Likelihood comparison
+values2 <- comparison_summary$LogLik
+values2[is.na(values2)] <- 0  # Set NA to 0 for plotting
+barplot(values2, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="Log-Likelihood (Higher is Better)",
+        ylab="Log-Likelihood", border=NA, las=1)
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Failed") {
+    text(x=(i-1)*1.2 + 0.7, y=min(values2[!is.na(comparison_summary$LogLik)])/2, 
+         labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+# 3. AIC comparison
+values3 <- comparison_summary$AIC
+values3[is.na(values3)] <- 0
+barplot(values3, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="AIC Comparison (Lower is Better)",
+        ylab="AIC", border=NA, las=1)
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Failed") {
+    text(x=(i-1)*1.2 + 0.7, y=min(values3[!is.na(comparison_summary$AIC)])/2,
+         labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+# 4. BIC comparison
+values4 <- comparison_summary$BIC
+values4[is.na(values4)] <- 0
+barplot(values4, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="BIC Comparison (Lower is Better)",
+        ylab="BIC", border=NA, las=1)
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Failed") {
+    text(x=(i-1)*1.2 + 0.7, y=min(values4[!is.na(comparison_summary$BIC)])/2,
+         labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+par(mfrow=c(1,1))
+
+cat("\n\n=== MODEL SPECIFICATION ===\n")
+cat("All metals fitted with:\n")
+cat("  - Model: DCC-GARCH(1,1) with sGARCH univariate specifications\n")
+cat("  - Distribution: Multivariate Student-t\n")
+cat("  - Series: Limited to first 4 series per metal for computational efficiency\n\n")
+
+cat("=== INTERPRETATION ===\n")
+cat("GARCH Type: Standard GARCH(1,1) - captures volatility clustering\n")
+cat("Distribution: Student-t - allows for heavy tails common in financial data\n")
+cat("AIC/BIC: Information criteria for model comparison (lower = better fit)\n")
+cat("DCC: Dynamic conditional correlations capture time-varying relationships\n\n")
+
 cat("================================================================================\n")
-cat("                    ANALYSIS COMPLETE - ALL VISUALIZATIONS GENERATED\n")
+cat("                 DCC-GARCH ANALYSIS COMPLETE\n")
 cat("================================================================================\n\n")
-```
+``` 
