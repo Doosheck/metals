@@ -700,6 +700,7 @@ par(mfrow=c(1,1))
 # DCC-GARCH MODEL SELECTION
 
 ```{r dcc-setup, message=FALSE, warning=FALSE}
+# NOT NEEDED
 cat("\n")
 cat("================================================================================\n")
 cat("              DCC-GARCH MODEL SELECTION AND ESTIMATION\n")
@@ -724,6 +725,8 @@ cat("Function: DCCGARCHselection() - Selects best DCC-GARCH specification\n\n")
 ```
 
 ```{r prepare-dcc-data}
+library(xts)
+library(knitr)
 cat("\n=== PREPARING DATA FOR DCC-GARCH ===\n\n")
 
 # Prepare return data as xts objects with proper dates
@@ -773,7 +776,7 @@ cat("Data prepared and cleaned as xts objects:\n")
 cat("  Lithium:", nrow(lithium_xts), "observations x", ncol(lithium_xts), "series\n")
 cat("  Nickel:", nrow(nickel_xts), "observations x", ncol(nickel_xts), "series\n")
 cat("  Cobalt:", nrow(cobalt_xts), "observations x", ncol(cobalt_xts), "series\n")
-cat("  Copper:", nrow(copper_xts), "observations x", ncol(copper_xts), "series\n\n")
+cat("  Copper:", nrow(copper_xts), "observations x", ncol(copper_xts), "series\n")
 ```
 
 ```{r diagnose-data}
