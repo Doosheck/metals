@@ -47,33 +47,55 @@ autoplot(est)
 library(tidyverse)
 
 getwd()
-df_NI <- read.csv("data/ALL_nickel_prices_cubic_spline.csv") #bañka na 1 szeregu
-#df_NI <- read.csv("data/ALL_copper_prices_cubic_spline.csv") #nie ma baniek
-#df_NI <- read.csv("data/ALL_lithium_prices_cubic_spline.csv") #s¹ bañki na LIDAILY i LISAME
-#df_NI <- read.csv("data/ALL_cobalt_prices_cubic_spline.csv") #s¹, du¿o i w tym samym czasie
+df_NI <- read.csv("data/ALL_nickel_prices_cubic_spline.csv") #bañka na 1 szeregu NIETFN
+df_CU <- read.csv("data/ALL_copper_prices_cubic_spline.csv") #nie ma baniek
+df_LI <- read.csv("data/ALL_lithium_prices_cubic_spline.csv") #s¹ bañki na LIDAILY i LISAME
+df_CO <- read.csv("data/ALL_cobalt_prices_cubic_spline.csv") #s¹, du¿o i w tym samym czasie
 
-colnames(df_NI)
+install.packages("visdat")
+library(visdat)
+vis_dat(df_NI) # Pokazuje graficznie, gdzie s¹ braki (NA)
+vis_dat(df_CU)
+vis_dat(df_LI)
+vis_dat(df_CO)
 
 
-# Konwersja daty i filtrowanie "Czêœci Wspólnej" (dla ka¿dego szeregu sprawdziæ)
-df_NI_clean <- df_NI %>%
-  select(-"NIWUXI") %>%
+# Konwersja daty i filtrowanie "Czêœci Wspólnej" (dla ka¿dego szeregu oddzielnie)
+df_clean <- df_NI %>%
+  select(-"NIETFN") %>%
   mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
-  na.omit()                         # KLUCZOWE: Usuwa wiersze z jakimkolwiek brakiem (NA)
+  na.omit()                         
+
+df_clean <- df_CO %>%
+  select(-c("COSMMS", "COCOMX")) %>%
+  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
+  na.omit()                         
+
+df_clean <- df_CU %>%
+  select(-"CUETFC") %>%
+  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
+  na.omit()                         
+
+df_clean <- df_LI %>%
+  select(-c("LILAMC", "LIEALG", "LIABG")) %>%
+  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
+  na.omit()                         
+
 
 # Sprawdzenie zakresu dat po oczyszczeniu
-print(paste("Pocz¹tek analizy:", min(df_NI_clean$Date)))
-print(paste("Koniec analizy:", max(df_NI_clean$Date)))
-print(paste("Liczba obserwacji:", nrow(df_NI_clean)))
+print(paste("Pocz¹tek analizy:", min(df_clean$Date)))
+print(paste("Koniec analizy:", max(df_clean$Date)))
+print(paste("Liczba obserwacji:", nrow(df_clean)))
+head(df_clean)
 
 # Przygotowanie macierzy do testu
 # Wyci¹gamy same dane numeryczne (bez kolumny Date)
-data_matrix <- df_NI_clean %>% 
+data_matrix <- df_clean %>% 
   select(-Date) %>% # Usuwamy kolumnê Date, zostaj¹ tylko szeregi cen
   mutate(across(everything(), log))
 
 # Przypisujemy daty jako nazwy wierszy (dla ³adnych wykresów)
-rownames(data_matrix) <- as.character(df_NI_clean$Date)
+rownames(data_matrix) <- as.character(df_clean$Date)
 
 head(data_matrix)
 
@@ -165,7 +187,10 @@ print(paste("Minimalne okno (w dniach):", min_window))
 
 
 # wykres do zapisu  
-bubble_plot <- ggplot() +
+
+library(patchwork)
+
+bubble_plot_NI <- ggplot() +
   # WARSTWA 1: Czerwone obszary (bañki)
   # Rysujemy je TYLKO jeœli bubble_rects nie jest puste
   {if(nrow(bubble_rects) > 0) 
