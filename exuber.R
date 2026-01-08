@@ -64,7 +64,7 @@ vis_dat(df_CO)
 
 # Konwersja daty i filtrowanie "Czêœci Wspólnej" (dla ka¿dego szeregu oddzielnie)
 df_clean <- df_NI %>%
-  select(-"NIETFN") %>%
+  select(-c("NIETFN", "NIWUXI")) %>%
   mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
   na.omit()                         
 
@@ -78,8 +78,9 @@ df_clean <- df_CU %>%
   mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
   na.omit()                         
 
+colnames(df_LI)
 df_clean <- df_LI %>%
-  select(-c("LILAMC", "LIEALG", "LIABG")) %>%
+  select(-c("LILAMC", "LIEALC", "LIEABG")) %>%
   mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
   na.omit()                         
 
@@ -116,10 +117,14 @@ summary(est_results) #je¿eli pojawia siê b³¹d, wówczas
 # poniewa¿ u mnie exuberdata nie chce siê zaladowaæ,
 # liczymy wartoœci krytyczne (w zastêpstwie pakietu exuberdata)
 # To mo¿e potrwaæ kilka-kilkanaœcie sekund
-wartosci_krytyczne <- radf_mc_cv(n = nrow(data_matrix)) 
+wartosci_krytyczne_NI <- radf_mc_cv(n = nrow(data_matrix)) 
+wartosci_krytyczne_CO <- radf_mc_cv(n = nrow(data_matrix)) 
+wartosci_krytyczne_LI <- radf_mc_cv(n = nrow(data_matrix))
 
 # 2. Wyznacz daty i podaj wartoœci krytyczne 
-bubble_dates <- datestamp(est_results, cv = wartosci_krytyczne)
+bubble_dates <- datestamp(est_results, cv = wartosci_krytyczne_NI)
+bubble_dates <- datestamp(est_results, cv = wartosci_krytyczne_CO)
+bubble_dates <- datestamp(est_results, cv = wartosci_krytyczne_LI)
 #bubble_dates <- datestamp(est_results)
 
 # o ile s¹ jakieœ bañki, to tu je mo¿na narysowaæ
@@ -190,9 +195,9 @@ print(paste("Minimalne okno (w dniach):", min_window))
 
 # wykres do zapisu  
 
-library(patchwork)
+#library(patchwork)
 
-bubble_plot_NI <- ggplot() +
+bubble_plot_CO <- ggplot() +
   # WARSTWA 1: Czerwone obszary (bañki)
   # Rysujemy je TYLKO jeœli bubble_rects nie jest puste
   {if(nrow(bubble_rects) > 0) 
@@ -211,11 +216,24 @@ bubble_plot_NI <- ggplot() +
        #subtitle = ",
        x = "",
        y = "") +
-  theme_minimal() #+
+  theme_minimal() +
   #theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Pochylenie dat, ¿eby siê mieœci³y
-
+  theme(
+  strip.text = element_text(size = 14, face = "bold"), # Rozmiar i pogrubienie tytu³ów paneli
+  #axis.text.x = element_text(angle = 45, hjust = 1)   # Opcjonalne pochylenie dat
+)
 # zmienic nazwê pliku banki_metal,pdf
 ggsave(filename = "graphsR/bubble_nickel.pdf", 
-       plot = bubble_plot, 
+       plot = bubble_plot_NI, 
+       width = 12, 
+       height = 10)
+
+ggsave(filename = "graphsR/bubble_cobalt.pdf", 
+       plot = bubble_plot_CO, 
+       width = 12, 
+       height = 10)
+
+ggsave(filename = "graphsR/bubble_lithium.pdf", 
+       plot = bubble_plot_LI, 
        width = 12, 
        height = 10)
