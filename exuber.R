@@ -1,10 +1,10 @@
 install.packages("exuber")
 #install_exuberdata()
-install.packages("exuberdata")
+#install.packages("exuberdata")
 library(exuber)
 library(urca)
 library(ggplot2)
-library(exuberdata)
+#library(exuberdata)
 
 
 #---- example for the package----
@@ -52,9 +52,13 @@ df_NI <- read.csv("data/ALL_nickel_prices_cubic_spline.csv") #bañka na 1 szeregu
 #df_NI <- read.csv("data/ALL_lithium_prices_cubic_spline.csv") #s¹ bañki na LIDAILY i LISAME
 #df_NI <- read.csv("data/ALL_cobalt_prices_cubic_spline.csv") #s¹, du¿o i w tym samym czasie
 
-# Konwersja daty i filtrowanie "Czêœci Wspólnej"
+colnames(df_NI)
+
+
+# Konwersja daty i filtrowanie "Czêœci Wspólnej" (dla ka¿dego szeregu sprawdziæ)
 df_NI_clean <- df_NI %>%
-  mutate(Date = as.Date(Date)) %>%  # Upewnij siê, ¿e R rozumie, ¿e to daty
+  select(-"NIWUXI") %>%
+  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ¿e to daty
   na.omit()                         # KLUCZOWE: Usuwa wiersze z jakimkolwiek brakiem (NA)
 
 # Sprawdzenie zakresu dat po oczyszczeniu
@@ -78,21 +82,19 @@ head(data_matrix)
 est_results <- radf(data_matrix)
 
 # Wyœwietlenie podsumowania (czy wykryto bañki?)
-summary(est_results) #je¿eli pojawia siê b³¹d, move forward
-
-# problem z instalacj¹
+summary(est_results) #je¿eli pojawia siê b³¹d, wówczas
+# prawodpodobnie jest to problem z instalacj¹ i trzeba uruchomiæ 3 linie:
 # exuber::install_exuberdata()
-library(exuberdata)
-est_results <- radf(data_matrix)
+# library(exuberdata)
+# est_results <- radf(data_matrix)
 
 
-# exuberdata nie chce siê zaladowaæ
-# liczymy wartoœci krytyczne (zastêpuje to pakiet exuberdata)
+# poniewa¿ u mnie exuberdata nie chce siê zaladowaæ,
+# liczymy wartoœci krytyczne (w zastêpstwie pakietu exuberdata)
 # To mo¿e potrwaæ kilka-kilkanaœcie sekund
 wartosci_krytyczne <- radf_mc_cv(n = nrow(data_matrix)) 
 
 # 2. Wyznacz daty i podaj wartoœci krytyczne 
-# Dziêki temu funkcja nie bêdzie szukaæ brakuj¹cego pakietu
 bubble_dates <- datestamp(est_results, cv = wartosci_krytyczne)
 #bubble_dates <- datestamp(est_results)
 
@@ -114,16 +116,15 @@ df_plot <- as.data.frame(data_matrix) %>%
   pivot_longer(-Date, names_to = "Series", values_to = "Price")%>%
   mutate(Series = factor(Series, levels = keep_order))
 
-# --- B. PRZYGOTOWANIE BANIEK (CZERWONE PROSTOK¥TY) ---
-# To jest ten "trudny" moment, który robimy rêcznie.
-# Pêtla przejdzie przez Twoje wyniki i zamieni numery wierszy na prawdziwe daty.
+# --- B. PRZYGOTOWANIE BANIEK  ---
+# Pêtla przejdzie przez wyniki i zamieni numery wierszy na daty.
 
 bubble_rects <- data.frame() # Pusty kontener na wyniki
 
 # Pobieramy wektor prawdziwych dat z Twoich danych
 all_dates <- as.Date(rownames(data_matrix))
 
-# Pêtla po ka¿dym szeregu (NIDALY, NILMEX itd.)
+# Pêtla po ka¿dym szeregu 
 for (name in names(bubble_dates)) {
   
   # Pobierz tabelê start/koniec dla danego metalu
@@ -152,7 +153,7 @@ if(nrow(bubble_rects) > 0) {
   bubble_rects$Series <- factor(bubble_rects$Series, levels = keep_order)
 }
 
-# SprawdŸmy, czy coœ znalaz³ (powinny tu byæ daty)
+# Sprawdzamy, czy coœ znalaz³ (je¿eli tak, to bêd¹ daty)
 print(head(bubble_rects))
 
 # jakie jest minimalne okno obserwacji do testu gsadf
@@ -163,8 +164,8 @@ print(paste("Liczba obserwacji:", T_GSADF))
 print(paste("Minimalne okno (w dniach):", min_window))
 
 
-# wykres do zapisu - 3 miejsca do zmiany: nazwa wykresu tu i w ggsave i nazwa pliku 
-bubble_NI <- ggplot() +
+# wykres do zapisu  
+bubble_plot <- ggplot() +
   # WARSTWA 1: Czerwone obszary (bañki)
   # Rysujemy je TYLKO jeœli bubble_rects nie jest puste
   {if(nrow(bubble_rects) > 0) 
@@ -186,7 +187,8 @@ bubble_NI <- ggplot() +
   theme_minimal() #+
   #theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Pochylenie dat, ¿eby siê mieœci³y
 
-ggsave(filename = "graphsR/banki_nikiel.pdf", 
-       plot = bubble_NI, 
+# zmienic nazwê pliku banki_metal,pdf
+ggsave(filename = "graphsR/bubble_nickel.pdf", 
+       plot = bubble_plot, 
        width = 12, 
        height = 10)
