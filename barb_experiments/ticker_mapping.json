@@ -22,7 +22,8 @@
     "Price_LME_3M": "COLME3",
     "Price_LME_All_Location_Stock": "COLMEA",
     "Price_WUXI": "COWUXI",
-    "Price_COMEX": "COCOMX"
+    "Price_COMEX": "COCOMX",
+    "Price_SMM": "COSMMS"
   },
   "copper": {
     "Price_DailyMetal": "CUDALY",
