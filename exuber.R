@@ -5,6 +5,10 @@ library(exuber)
 library(urca)
 library(ggplot2)
 #library(exuberdata)
+install.packages("visdat")
+library(visdat)
+library(tidyverse)
+
 
 
 #---- example for the package----
@@ -44,7 +48,6 @@ autoplot(est)
 
 
 #---- an application to metals----
-library(tidyverse)
 
 getwd()
 df_NI <- read.csv("data/ALL_nickel_prices_cubic_spline.csv") #bañka na 1 szeregu NIETFN
@@ -52,8 +55,7 @@ df_CU <- read.csv("data/ALL_copper_prices_cubic_spline.csv") #nie ma baniek
 df_LI <- read.csv("data/ALL_lithium_prices_cubic_spline.csv") #s¹ bañki na LIDAILY i LISAME
 df_CO <- read.csv("data/ALL_cobalt_prices_cubic_spline.csv") #s¹, du¿o i w tym samym czasie
 
-install.packages("visdat")
-library(visdat)
+
 vis_dat(df_NI) # Pokazuje graficznie, gdzie s¹ braki (NA)
 vis_dat(df_CU)
 vis_dat(df_LI)
