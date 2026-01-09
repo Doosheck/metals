@@ -35,6 +35,11 @@ def load_metal_data(metal_name, ticker_mappings):
         # Get price columns (exclude Date)
         price_cols = [col for col in df.columns if col != 'Date']
         
+        # Exclude LISAME for lithium
+        if metal_name.lower() == 'lithium' and 'LISAME' in price_cols:
+            price_cols = [col for col in price_cols if col != 'LISAME']
+            print(f"  Excluding LISAME series for {metal_name}")
+        
         # Calculate returns for all price columns at once
         returns_df = df.copy()
         
