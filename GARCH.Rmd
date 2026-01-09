@@ -908,11 +908,12 @@ for(i in 1:ncol(copper_prices)) {
 }
 ```
 
-```{r copper-dcc-garch}
+```{r copper-dcc-garch_adjusted_BBS}
 cat("\n=== COPPER DCC-GARCH MODEL ===\n")
 
-copper_returns_matrix <- as.matrix(copper_returns_df[, -1])
-colnames(copper_returns_matrix) <- colnames(copper_prices)
+copper_returns_matrix1 <- as.matrix(copper_returns_df[, -7])
+copper_returns_matrix <- as.matrix(copper_returns_matrix1[, -1])
+#colnames(copper_returns_matrix) <- colnames(copper_prices)
 copper_returns_matrix <- na.omit(copper_returns_matrix)
 
 uspec <- ugarchspec(
@@ -926,16 +927,74 @@ multifit <- multifit(multispec, copper_returns_matrix)
 
 dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
 
-dcc_fit_copper <- tryCatch({
-  dccfit(dcc_spec, data = copper_returns_matrix, fit.control = list(eval.se = FALSE))
-}, error = function(e) {
-  cat("DCC fitting failed, trying with pre-fitted models...\n")
-  dccfit(dcc_spec, data = copper_returns_matrix, fit = multifit, 
-         fit.control = list(eval.se = FALSE))
-})
-
+dcc_fit <- dccfit(dcc_spec, data = as.matrix(copper_returns_matrix * 100), 
+              solver = "solnp") #“solnp”, “nlminb”, “lbfgs”, “gosolnp”
+#dcc_fit_copper <- tryCatch({
+  #dccfit(dcc_spec, data = copper_returns_matrix, fit.control = list(eval.se = FALSE))
+#}, error = function(e) {
+  #cat("DCC fitting failed, trying with pre-fitted models...\n")
+  #dccfit(dcc_spec, data = copper_returns_matrix, fit = multifit, 
+        # fit.control = list(eval.se = FALSE))
+#})
+dcc_fit_copper <- dcc_fit
 print(dcc_fit_copper)
+```
 
+
+```{r copper-dcc-garch_added_BBS}
+# 1. Wyci¹gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
+cor_array <- rcor(dcc_fit_copper) 
+n_obs_model <- dim(cor_array)[3]
+# Wybieramy TYLKO te daty, które odpowiadaj¹ wynikom modelu
+dates_aligned <- tail(copper_returns_df$Date, n_obs_model)
+
+# 2. Pobieramy nazwy metali 
+metal_names <- colnames(copper_returns_matrix) 
+n <- length(metal_names)
+
+# 3. Tworzymy listê wszystkich par (10 kombinacji)
+lista_korelacji <- list()
+k <- 1
+
+for(i in 1:(n-1)) {
+  for(j in (i+1):n) {
+    lista_korelacji[[k]] <- data.frame(
+      Date = dates_aligned,
+      Para = paste(metal_names[i], metal_names[j], sep = " vs "),
+      Wartosc = cor_array[i, j, ]
+    )
+    k <- k + 1
+  }
+}
+
+# 4. £¹czymy wszystko w jedn¹ d³ug¹ tabelê
+df_plot <- bind_rows(lista_korelacji)
+
+# 5. Rysujemy 10 wykresów w siatce (facet_wrap)
+dcc_plot_CU <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
+  geom_line(color = "darkblue", linewidth = 0.5) +
+  facet_wrap(~Para, ncol = 2, scales = "free_y") + # 2 kolumny, 5 wierszy
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years") + # Poprawne daty
+  theme_minimal(base_size = 9) + # Mniejsza czcionka, ¿eby 10 wykresów siê zmieœci³o
+  labs(
+    title = NULL, # Brak tytu³u g³ównego
+    x = NULL, 
+    y = ""
+  ) +
+  theme(
+    strip.text = element_text(face = "bold"), # Pogrubione nazwy par
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(filename = "graphsR/DCC_copper.pdf", 
+       plot = dcc_plot_CU, 
+       width = 12, 
+       height = 10)
+
+```
+
+
+```{r copper-dcc-garch}
 if(class(dcc_fit_copper)[1] == "DCCfit") {
   dcc_cor <- rcor(dcc_fit_copper)
   n_series <- ncol(copper_prices)
