@@ -117,7 +117,10 @@ if __name__ == "__main__":
     # Możesz podać listę plików ręcznie tutaj:
     files_to_process = [
         #"data/ALL_lithium_prices_interpolated.csv",
-         "data/ALL_copper_prices_cubic_spline.csv" 
+        # "data/ALL_copper_prices_cubic_spline.csv",
+        # "data/ALL_lithium_prices_cubic_spline.csv",
+        # "data/ALL_nickel_prices_cubic_spline.csv"
+           "data/ALL_cobalt_prices_cubic_spline.csv"
     ]
 
     # Tutaj definiujemy folder zapisu (względem miejsca uruchomienia skryptu)
