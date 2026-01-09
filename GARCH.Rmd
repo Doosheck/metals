@@ -1060,6 +1060,38 @@ par(mfrow = c(1, 1))
 
 ```
 ```{r GARCH_MGARCH}
+# 1. Specyfikacja pojedynczego modelu (AR(1), GJR-GARCH(1,1), t-Student)
+uspec <- ugarchspec(
+  variance.model = list(model = "fiGARCH", garchOrder = c(1,1)),
+  mean.model = list(armaOrder = c(1,0)),
+  distribution.model = "std"
+)
+
+# 2. Powielenie specyfikacji dla 4 szeregów
+mspec <- multispec(replicate(4, uspec))
+
+# 3. Specyfikacja DCC (DCC(1,1), wielowymiarowy rozk³ad t-Studenta)
+dspec <- dccspec(mspec, dccOrder = c(1,1), model = "DCC", distribution = "mvt")
+```
+
+```{r test_modeli}
+test_fit <- ugarchfit(spec = uspec, data = dcc_returns[,4] * 100)
+print(test_fit)
+```
+
+
+
+```{r GARCH_MGARCH}
+# 4. Estymacja modelu (dane dcc_returns bez kolumny Date!)
+fit <- dccfit(dspec, data = as.matrix(dcc_returns[,-1]* 100))
+
+# --- WYNIKI ---
+print(fit) # Wyœwietla oszacowania GARCH (Etap 1) i DCC (Etap 2)
+```
+
+
+```{r GARCH_MGARCH}
+plot(fit, which = 4, main = "")
 
 ```
 
