@@ -1004,3 +1004,62 @@ kable(cobalt_summary, caption = "Cobalt GARCH Models")
 cat("\n=== COPPER MODELS SUMMARY ===\n")
 kable(copper_summary, caption = "Copper GARCH Models")
 ```
+
+
+# Inter-metal DCC 
+```{r data_prep}
+dcc_data <- copper %>% select(Date, CULMEX) %>%
+  inner_join(nickel %>% select(Date, NILMEX), by = "Date") %>%
+  inner_join(lithium %>% select(Date, LILMEX), by = "Date") %>%
+  inner_join(cobalt %>% select(Date, COLMEX), by = "Date") %>%
+  na.omit()
+head(dcc_data, 30)
+```
+```{r prices_plot}
+library(ggplot2)
+library(tidyr) 
+
+dcc_data %>%
+  pivot_longer(-Date, names_to = "Metal", values_to = "Price") %>%
+  ggplot(aes(x = Date, y = Price, color = Metal)) +
+  geom_line() +
+  facet_wrap(~Metal, scales = "free_y") + 
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
+
+```{r returns}
+dcc_returns <- dcc_data %>%
+  mutate(across(-Date, ~ log(. / lag(.)))) %>%
+  na.omit()
+tail(dcc_returns, 10)
+
+```
+
+```{r ACF_PACF_sq_ret}
+par(mfrow = c(4, 2), mar = c(2, 2, 2, 1))
+# ACF i PACF dla zwrotów:
+for (col_name in names(dcc_returns)[-1]) {
+  acf(dcc_returns[[col_name]], main = paste("ACF:", col_name), lag.max = 20)
+  pacf(dcc_returns[[col_name]], main = paste("PACF:", col_name), lag.max = 20)
+}
+```
+
+
+```{r ACF_PACF_sq_ret}
+
+par(mfrow = c(4, 2), mar = c(2, 2, 2, 1))
+# ACF i PACF dla kwadratów zwrotów:
+for (col_name in names(dcc_returns)[-1]) {
+  acf((dcc_returns[[col_name]])^2, main = paste("ACF:", col_name), lag.max = 20)
+  pacf((dcc_returns[[col_name]])^2, main = paste("PACF:", col_name), lag.max = 20)
+}
+
+par(mfrow = c(1, 1))
+
+```
+```{r GARCH_MGARCH}
+
+```
+
