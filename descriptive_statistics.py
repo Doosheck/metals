@@ -25,8 +25,8 @@ def load_ticker_mappings():
 
 def load_metal_data(metal_name, ticker_mappings):
     """Load metal price data and calculate returns."""
-    file_path = f'data/ALL_{metal_name}_prices_interpolated.csv'
-    
+    file_path = f'data/ALL_{metal_name}_prices_cubic_spline.csv'
+
     try:
         df = pd.read_csv(file_path)
         df['Date'] = pd.to_datetime(df['Date'])
@@ -211,23 +211,35 @@ def main():
         return None
 
 def generate_latex_table(stats_df):
-    """Generate LaTeX formatted table."""
+    """Generate LaTeX formatted table with tabularx and custom formatting."""
     
     latex = r"""\begin{table}[htbp]
 \centering
 \caption{Descriptive Statistics of Metal Price Returns}
-\begin{tabular}{lrrrrrr}
+\label{tab:metals_returns_stats}
+\setlength{\tabcolsep}{8pt} % adjust column spacing
+\renewcommand{\arraystretch}{1.1} % row height
+\begin{tabularx}{\textwidth + 2cm}{l p{1cm} X X X X X X}
 \hline
 \textbf{Ticker} & \textbf{Obs} & \textbf{Mean} & \textbf{Std} & \textbf{Min} & \textbf{Q1} & \textbf{Q3} & \textbf{Max} \\
 \hline
 """
     
+    # Group by metal to add separators
+    current_metal = None
     for _, row in stats_df.iterrows():
+        # Add separator line between different metals
+        if current_metal is not None and row['Metal'] != current_metal:
+            latex += r"\hline" + "\n"
+        
+        current_metal = row['Metal']
+        
+        # Format the row
         latex += f"{row['Ticker']} & {row['Observations']} & {row['Mean']:.6f} & {row['Std']:.6f} & {row['Min']:.6f} & {row['Q1']:.6f} & {row['Q3']:.6f} & {row['Max']:.6f} \\\\\n"
     
     latex += r"""\hline
-\end{tabular}
-\label{tab:metals_returns_stats}
+\hline
+\end{tabularx}
 \end{table}"""
     
     return latex
