@@ -244,14 +244,28 @@ cat("\n=== LITHIUM UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
 
 # Create HTML table with color coding
 library(kableExtra)
-kable(lithium_summary_table, 
+library(webshot)
+
+# Create output directory
+dir.create("outputs/unit_root_tables", showWarnings = FALSE, recursive = TRUE)
+
+# Generate and save table as PNG
+lithium_table <- kable(lithium_summary_table, 
       caption = "Lithium Returns: Unit Root Test Results Summary",
-      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS")) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
   column_spec(3, background = ifelse(lithium_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(5, background = ifelse(lithium_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(7, background = ifelse(lithium_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(9, background = ifelse(lithium_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(lithium_table, "outputs/unit_root_tables/lithium_unit_root_summary.png", zoom = 2)
+cat("Saved: outputs/unit_root_tables/lithium_unit_root_summary.png\n\n")
+
+# Display in HTML output
+lithium_table
 
 # Plot test statistics
 par(mfrow=c(2,2), mar=c(8,4,2,1))
@@ -384,14 +398,24 @@ nickel_summary_table <- data.frame(
 )
 
 cat("\n=== NICKEL UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
-kable(nickel_summary_table,
+
+# Generate and save table as PNG
+nickel_table <- kable(nickel_summary_table,
       caption = "Nickel Returns: Unit Root Test Results Summary",
-      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS")) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
   column_spec(3, background = ifelse(nickel_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(5, background = ifelse(nickel_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(7, background = ifelse(nickel_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(9, background = ifelse(nickel_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(nickel_table, "outputs/unit_root_tables/nickel_unit_root_summary.png", zoom = 2)
+cat("Saved: outputs/unit_root_tables/nickel_unit_root_summary.png\n\n")
+
+# Display in HTML output
+nickel_table
 
 # Plot test statistics
 par(mfrow=c(2,2), mar=c(8,4,2,1))
@@ -524,14 +548,24 @@ cobalt_summary_table <- data.frame(
 )
 
 cat("\n=== COBALT UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
-kable(cobalt_summary_table,
+
+# Generate and save table as PNG
+cobalt_table <- kable(cobalt_summary_table,
       caption = "Cobalt Returns: Unit Root Test Results Summary",
-      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS")) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
   column_spec(3, background = ifelse(cobalt_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(5, background = ifelse(cobalt_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(7, background = ifelse(cobalt_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(9, background = ifelse(cobalt_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(cobalt_table, "outputs/unit_root_tables/cobalt_unit_root_summary.png", zoom = 2)
+cat("Saved: outputs/unit_root_tables/cobalt_unit_root_summary.png\n\n")
+
+# Display in HTML output
+cobalt_table
 
 # Plot test statistics
 par(mfrow=c(2,2), mar=c(8,4,2,1))
@@ -664,14 +698,24 @@ copper_summary_table <- data.frame(
 )
 
 cat("\n=== COPPER UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
-kable(copper_summary_table,
+
+# Generate and save table as PNG
+copper_table <- kable(copper_summary_table,
       caption = "Copper Returns: Unit Root Test Results Summary",
-      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS")) %>%
-  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
   column_spec(3, background = ifelse(copper_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(5, background = ifelse(copper_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(7, background = ifelse(copper_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
   column_spec(9, background = ifelse(copper_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(copper_table, "outputs/unit_root_tables/copper_unit_root_summary.png", zoom = 2)
+cat("Saved: outputs/unit_root_tables/copper_unit_root_summary.png\n\n")
+
+# Display in HTML output
+copper_table
 
 # Plot test statistics
 par(mfrow=c(2,2), mar=c(8,4,2,1))
