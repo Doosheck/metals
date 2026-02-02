@@ -2,7 +2,8 @@
 .vscode/
 
 # Generated analysis outputs
-barb_experiments/output/
+#barb_experiments/output/
+!barb_experiments/output/*.png
 
 # Python cache/bytecode
 __pycache__/
