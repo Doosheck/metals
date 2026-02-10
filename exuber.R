@@ -1,103 +1,383 @@
+# --- 1. Load Libraries ---
 install.packages("exuber")
-#install_exuberdata()
-#install.packages("exuberdata")
-library(exuber)
-library(urca)
-library(ggplot2)
-#library(exuberdata)
 install.packages("visdat")
-library(visdat)
+install.packages("here")
+#install.packages("exuberdata")
 library(tidyverse)
+library(exuber)
+library(visdat)
+library(here) # Critical for OneDrive/Project relative paths
+
+
+# --- 2. Data Loading ---
+# Using here() to ensure paths work across different machines/OneDrive syncs
+df_NI <- read_csv(here("data/ALL_nickel_prices_cubic_spline.csv"), 
+                  show_col_types = FALSE, 
+                  guess_max = 10000)
+
+df_CU <- read_csv(here("data/ALL_copper_prices_cubic_spline.csv"), 
+                  show_col_types = FALSE, 
+                  guess_max = 10000)
+
+df_LI <- read_csv(here("data/ALL_lithium_prices_cubic_spline.csv"), 
+                  show_col_types = FALSE, 
+                  guess_max = 10000)
+
+df_CO <- read_csv(here("data/ALL_cobalt_prices_cubic_spline.csv"), 
+                  show_col_types = FALSE, 
+                  guess_max = 10000)
+
+# --- Visual Inspection ---
+# Look at these plots to see where the gaps (NA values) are
+vis_dat(df_NI) + labs(title = "Nickel")
+vis_dat(df_CU) + labs(title = "Copper")
+vis_dat(df_LI) + labs(title = "Lithium")
+vis_dat(df_CO) + labs(title = "Cobalt")
 
 
 
-#---- example for the package----
-# 1. Run the test on your time series (e.g., 'sim_data')
-rsim <- radf(sim_data)
-rsim_df <- unlist(rsim)
-head(sim_data)
-plot(rsim_df)
-head(rsim_df)
-# 2. Get critical values (95% confidence) to see if a bubble exists
-summary(rsim)
+# --- 2.1. Cleaning Individual Series ---
 
-# 3. If a bubble is detected, find the dates
-dates <- datestamp(rsim)
-autoplot(dates)
+# # Nickel: Remove problematic columns and NA rows
+# df_NI_clean <- df_NI %>%
+#   select(Date, everything(), -any_of(c("NIETFN"))) %>%
+#   mutate(Date = as.Date(Date)) %>%
+#   na.omit()
+# 
+# # Copper: Remove ETFC column
+# df_CU_clean <- df_CU %>%
+#   select(Date, everything(), -any_of(c("CUETFC"))) %>%
+#   mutate(Date = as.Date(Date)) %>%
+#   na.omit()
+# 
+# # Lithium: Remove multiple columns
+# df_LI_clean <- df_LI %>%
+#   select(Date, everything(), -any_of(c("LILAMC", "LIEALC", "LIEABG"))) %>%
+#   mutate(Date = as.Date(Date)) %>%
+#   na.omit()
+# 
+# # Cobalt: Remove specific columns
+# df_CO_clean <- df_CO %>%
+#   select(Date, everything(), -any_of(c("COSMMS", "COCOMX"))) %>%
+#   mutate(Date = as.Date(Date)) %>%
+#   na.omit()
 
-## example 2:  
-# 1. Run the master function ONCE
-est <- radf(sim_data)
+# --- 2.2. Selection ---
+# Set the metals you want to include based on your vis_dat results.
+# Simply remove a name from this vector to exclude it (e.g., c("NI", "CU", "CO"))
+target_metals <- c("NI", "CU", "LI", "CO")
 
-# 2. When diagnosing, you can specify which method to use
-# Default is GSADF (recommended)
-summary(est) 
-str(est)
+# --- 2.3. Synchronizing Overlapping Dates ---
 
-# If you specifically wanted SADF results, you would do:
-summary(est, option = "sadf")
+# Define your target start and end date
+# Required End: Drops series that end too early (e.g., Dec 2024)
+# Required Start: Drops series that start too late (e.g., July 2021)
 
-# Identify the bubble periods
-dstamp <- datestamp(est)
-str(dstamp)
+# Define your target window
+required_end_date   <- as.Date("2025-07-21")
+required_start_date <- as.Date("2021-07-19")
 
-# Optional: View the specific dates in the console
-print(dstamp)
-autoplot(dstamp)
-autoplot(est)
+# These are the ONLY columns we explicitly discard
+drop_map <- list(
+  NI = c("NIETFN"),
+  CU = c("CUETFC"),
+  LI = c("LILAMC", "LIEALC", "LIEABG"),
+  CO = c("COSMMS", "COCOMX")
+)
+
+# --- 2.3. Cleaning & Synchronization Pipeline ---
+
+# 1. Load and clean columns first
+list_cleaned <- list(NI = df_NI, CU = df_CU, LI = df_LI, CO = df_CO)[target_metals] %>%
+  imap(function(df, name) {
+    df %>%
+      mutate(Date = as.Date(Date)) %>%
+      select(Date, everything(), -any_of(drop_map[[name]])) %>%
+      # Clip data to your specific window first
+      filter(Date >= required_start_date & Date <= required_end_date) %>%
+      na.omit()
+  })
+
+# 2. Survival Filter (Check if the resulting dataframes are actually populated)
+# This ensures we don't try to join an empty dataframe
+list_filtered <- list_cleaned %>%
+  keep(~ nrow(.x) > 0)
+
+# 3. Find the common dates across the surviving series
+# This will find the intersection of dates where ALL remaining series have data
+common_dates <- Reduce(intersect, map(list_filtered, ~ .x$Date)) %>% as.Date()
+
+# 4. Combine into the final data frame
+# This will now include ALL columns (series) from the surviving metals
+df_final <- list_filtered %>%
+  map(~ filter(.x, Date %in% common_dates)) %>%
+  reduce(full_join, by = "Date") %>%
+  arrange(Date)
+
+# --- 2.4. Final Verification ---
+message("--- Final Results ---")
+message("Metals included: ", paste(names(list_filtered), collapse = ", "))
+message("Series included: ", paste(names(df_final)[-1], collapse = ", "))
+message("Total columns in df_final: ", ncol(df_final) - 1) 
+
+print(paste("Analysis starts on:", min(df_final$Date)))
+print(paste("Analysis ends on:", max(df_final$Date)))
+print(paste("Total observations (rows):", nrow(df_final)))
+head(df_final)
 
 
-#---- an application to metals----
+# # --- 2.5a Save the Combined File ---
+# # This saves the synchronized 'df_final' containing all selected metals
+# write_csv(df_final, here("data", "combined_metals_cleaned.csv"))
+# message("Saved combined file: combined_metals_cleaned.csv")
 
-getwd()
-df_NI <- read.csv("data/ALL_nickel_prices_cubic_spline.csv") #ba?ka na 1 szeregu NIETFN
-df_CU <- read.csv("data/ALL_copper_prices_cubic_spline.csv") #nie ma baniek
-df_LI <- read.csv("data/ALL_lithium_prices_cubic_spline.csv") #s? ba?ki na LIDAILY i LISAME
-df_CO <- read.csv("data/ALL_cobalt_prices_cubic_spline.csv") #s?, du?o i w tym samym czasie
+# --- 4.1. Matrix Preparation ---
+# exuber requires a numeric matrix. We log-transform prices here.
+data_matrix <- df_final %>%
+  select(-Date) %>%
+  mutate(across(everything(), log)) %>%
+  as.matrix()
+
+# Assign dates as character row names for tracking
+rownames(data_matrix) <- as.character(df_final$Date)
+
+# --- 4.2. Run RADF Estimation ---
+# This calculates SADF and GSADF statistics for all series in the matrix.
+# Note: This might take a moment depending on the number of series.
+est_results <- radf(data_matrix)
+
+# --- 4.3. Calculate Critical Values ---
+# Since we have a specific sample size (n), we generate Monte Carlo 
+# critical values to perform the statistical test.
+
+n_obs <- nrow(data_matrix)
+mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
+mc_cv
+saveRDS(mc_cv, "mc_cv.rds")
+
+# --- 4.4. Summary of Results ---
+# This displays which series exhibit evidence of speculative bubbles
+summary(est_results, cv = mc_cv)
 
 
-vis_dat(df_NI) # Pokazuje graficznie, gdzie s? braki (NA)
-vis_dat(df_CU)
-vis_dat(df_LI)
-vis_dat(df_CO)
+#---- Bubbles plots and DV ----
 
+# --- 5.1. Extract Bubble Information ---
 
+# 1. Identify bubble windows for rectangles (start/end dates)
+bubble_dates <- datestamp(est_results, cv = mc_cv)
+
+# 2. Create 0-1 Dummies manually from datestamp results
+# Initialize a dataframe with all zeros
+series_names <- names(df_final)[-1]  # Exclude Date column
+bubble_dummies <- df_final %>% select(Date)
+
+# Add a column for each series, initialized to 0
+for (series_name in series_names) {
+  bubble_dummies[[series_name]] <- 0L
+}
+
+# Fill in 1s where bubbles are detected
+for (series_name in names(bubble_dates)) {
+  periods <- bubble_dates[[series_name]]
+  
+  if (!is.null(periods) && nrow(periods) > 0) {
+    # For each bubble period, set the corresponding rows to 1
+    for (i in 1:nrow(periods)) {
+      start_idx <- periods[i, "Start"]
+      end_idx <- periods[i, "End"]
+      bubble_dummies[[series_name]][start_idx:end_idx] <- 1L
+    }
+  }
+}
+
+# --- 5.2. Prepare Plotting Data ---
+
+# Create a dataframe with rectangle coordinates for ggplot
+bubble_rects <- map_df(names(bubble_dates), function(name) {
+  periods <- bubble_dates[[name]]
+  # Check if periods exist and have rows
+  if (!is.null(periods) && nrow(periods) > 0) {
+    tibble(
+      Series = name,
+      xmin = df_final$Date[periods[, "Start"]],
+      xmax = df_final$Date[periods[, "End"]],
+      ymin = -Inf, 
+      ymax = Inf
+    )
+  } else {
+    # Return empty tibble with correct structure
+    tibble(Series = character(), xmin = as.Date(character()), 
+           xmax = as.Date(character()), ymin = numeric(), ymax = numeric())
+  }
+})
+
+# Identify series that actually contained at least one bubble period
+active_series <- if(nrow(bubble_rects) > 0) unique(bubble_rects$Series) else character(0)
+
+# --- 5.3. Final Plotting & Saving ---
+
+# Filter price data for active series only and convert to long format
+df_plot_filtered <- df_final %>%
+  pivot_longer(-Date, names_to = "Series", values_to = "Price") %>%
+  filter(Series %in% active_series)
+
+# Create the plot
+bubble_plot <- ggplot() +
+  # Layer 1: Shaded grey areas representing bubble periods
+  {if(nrow(bubble_rects) > 0) {
+    geom_rect(data = bubble_rects, 
+              aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+              fill = "grey", alpha = 0.5)
+  }} +
+  # Layer 2: Black price lines
+  {if(nrow(df_plot_filtered) > 0) {
+    geom_line(data = df_plot_filtered, aes(x = Date, y = Price), color = "black")
+  }} +
+  facet_wrap(~ Series, scales = "free_y", ncol = 2) +
+  theme_minimal() +
+  labs(title = "Markets with Active Speculative Bubbles", 
+       x = NULL, y = "Log Price")
+
+# --- 5.4. Export Results ---
+
+# Save the dummy variables for the GARCH model
+write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
+
+# Save the plot as a PDF (only if there are active series)
+if(length(active_series) > 0) {
+  ggsave(here("graphsR", "bubbles_detected_only.pdf"), bubble_plot, 
+         width = 10, height = 8)
+  message("Plot saved successfully")
+} else {
+  message("No bubbles detected - no plot generated")
+}
+
+# --- 5.5. Final Verification ---
+message("--- Final Verification ---")
+message("Total series in dataset: ", length(series_names))
+message("Series with detected bubbles: ", length(active_series))
+if(length(active_series) > 0) {
+  message("Bubble series: ", paste(active_series, collapse = ", "))
+}
+
+# Display summary of bubble dummies
+message("\nBubble dummy summary (first 10 rows):")
+print(head(bubble_dummies, 10))
+
+message("\nBubble periods per series (column sums):")
+col_sums <- colSums(bubble_dummies[, -1])  # Exclude Date column
+print(col_sums[col_sums > 0])  # Only show series with bubbles
+
+message("\nUnique values in dummy columns:")
+unique_vals <- unique(unlist(bubble_dummies[, -1]))
+message("Values found: ", paste(unique_vals, collapse = ", "))
+# --- 5.1. Extract Dummies & Identification (Direct Method) ---
+
+# 1. Identify bubble windows for rectangles (start/end dates)
+bubble_dates <- datestamp(est_results, cv = mc_cv)
+
+# 2. Extract 0-1 Dummies using the core index logic
+# We use the internal 'index' method but force it into a data frame immediately
+# This avoids the 'size 0' and 'out of bounds' errors
+ind_logical <- index(est_results, cv = mc_cv)
+
+# We convert the list of logical vectors into a data frame of integers
+bubble_dummies <- map_dfc(ind_logical, ~ as.integer(.x)) %>%
+  bind_cols(Date = df_final$Date, .)
+
+# --- 5.2. Prepare Plotting Data ---
+
+# Identify specific start/end dates for bubble periods for shading
+bubble_dates <- datestamp(est_results, cv = mc_cv)
+
+# Create a dataframe with rectangle coordinates for ggplot
+bubble_rects <- map_df(names(bubble_dates), function(name) {
+  periods <- bubble_dates[[name]]
+  if (nrow(periods) > 0) {
+    tibble(
+      Series = name,
+      xmin = df_final$Date[periods[, "Start"]],
+      xmax = df_final$Date[periods[, "End"]],
+      ymin = -Inf, ymax = Inf
+    )
+  }
+})
+
+# Identify series that actually contained at least one bubble period
+active_series <- if(nrow(bubble_rects) > 0) unique(bubble_rects$Series) else character(0)
+
+# --- 5.3. Final Plotting & Saving ---
+
+# Filter price data for active series only and convert to long format
+df_plot_filtered <- df_final %>%
+  pivot_longer(-Date, names_to = "Series", values_to = "Price") %>%
+  filter(Series %in% active_series)
+
+bubble_plot <- ggplot() +
+  # Layer 1: Shaded grey areas representing bubble periods
+  {if(length(active_series) > 0) 
+    geom_rect(data = filter(bubble_rects, Series %in% active_series), 
+              aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+              fill = "grey", alpha = 0.5) 
+  } +
+  # Layer 2: Black price lines
+  geom_line(data = df_plot_filtered, aes(x = Date, y = Price), color = "black") +
+  facet_wrap(~ Series, scales = "free_y", ncol = 2) +
+  theme_minimal() +
+  labs(title = "Markets with Active Speculative Bubbles", 
+       x = NULL, y = "Log Price")
+
+# --- 5.4. Export Results ---
+
+# Save the dummy variables for the GARCH model
+write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
+
+# Save the plot as a PDF
+ggsave(here("graphsR", "bubbles_detected_only.pdf"), bubble_plot, width = 10, height = 8)
+
+message("--- Final Verification ---")
+message("Active Series Found: ", paste(active_series, collapse = ", "))
+# This should now correctly display 0s and 1s
+print(head(bubble_dummies, 5))
+
+#-------------------------------------------------------------------------------
+# OLD code
 # Konwersja daty i filtrowanie "Cz??ci Wsp?lnej" (dla ka?dego szeregu oddzielnie)
 df_clean <- df_NI %>%
-  select(-c("NIETFN", "NIWUXI")) %>%
-  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ?e to daty
+  select(-c("NIETFN", "NIWUXI")) %>%  #select(-c("NIETFN", "NIWUXI"))
+  mutate(Date = as.Date(Date)) %>%  #check for dates
   na.omit()                         
 
 df_clean <- df_CO %>%
   select(-c("COSMMS", "COCOMX")) %>%
-  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ?e to daty
+  mutate(Date = as.Date(Date)) %>%  #check for dates
   na.omit()                         
 
 df_clean <- df_CU %>%
   select(-"CUETFC") %>%
-  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ?e to daty
+  mutate(Date = as.Date(Date)) %>%  #check for dates
   na.omit()                         
 
 colnames(df_LI)
 df_clean <- df_LI %>%
   select(-c("LILAMC", "LIEALC", "LIEABG")) %>%
-  mutate(Date = as.Date(Date)) %>%  #sprawdzenie czy R rozumie, ?e to daty
+  mutate(Date = as.Date(Date)) %>%  #check for dates
   na.omit()                         
 
 
-# Sprawdzenie zakresu dat po oczyszczeniu
-print(paste("Pocz?tek analizy:", min(df_clean$Date)))
-print(paste("Koniec analizy:", max(df_clean$Date)))
-print(paste("Liczba obserwacji:", nrow(df_clean)))
+# check data
+print(paste("the beginning:", min(df_clean$Date)))
+print(paste("the end:", max(df_clean$Date)))
+print(paste("number of obs:", nrow(df_clean)))
 head(df_clean)
 
-# Przygotowanie macierzy do testu
-# Wyci?gamy same dane numeryczne (bez kolumny Date)
+# Prepare data for testing
 data_matrix <- df_clean %>% 
-  select(-Date) %>% # Usuwamy kolumn? Date, zostaj? tylko szeregi cen
+  select(-Date) %>%  #remove date column for testing
   mutate(across(everything(), log))
 
-# Przypisujemy daty jako nazwy wierszy (dla ?adnych wykres?w)
+# new rownames for the matrix (dates)
 rownames(data_matrix) <- as.character(df_clean$Date)
 
 head(data_matrix)
