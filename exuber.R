@@ -128,7 +128,7 @@ head(df_final)
 
 # # --- 2.5a Save the Combined File ---
 # # This saves the synchronized 'df_final' containing all selected metals
-# write_csv(df_final, here("data", "combined_metals_cleaned.csv"))
+write_csv(df_final, here("data", "combined_metals_cleaned.csv"))
 # message("Saved combined file: combined_metals_cleaned.csv")
 
 # --- 4.1. Matrix Preparation ---
@@ -341,8 +341,168 @@ message("Active Series Found: ", paste(active_series, collapse = ", "))
 # This should now correctly display 0s and 1s
 print(head(bubble_dummies, 5))
 
+#---- Version with bubble when prices are increasing and decreasing ----
+# --- 5.1. Extract Bubble Information ---
+
+# 1. Identify bubble windows for rectangles (start/end dates)
+bubble_dates <- datestamp(est_results, cv = mc_cv)
+
+# 2. Create 0-1-2 Dummies: 0 = no bubble, 1 = bubble during price increase, 2 = bubble during price decrease
+# Initialize a dataframe with all zeros
+series_names <- names(df_final)[-1]  # Exclude Date column
+bubble_dummies <- df_final %>% select(Date)
+
+# Add a column for each series, initialized to 0
+for (series_name in series_names) {
+  bubble_dummies[[series_name]] <- 0L
+}
+
+# Fill in 1s (price increase) or 2s (price decrease) where bubbles are detected
+for (series_name in names(bubble_dates)) {
+  periods <- bubble_dates[[series_name]]
+  
+  if (!is.null(periods) && nrow(periods) > 0) {
+    # For each bubble period
+    for (i in 1:nrow(periods)) {
+      start_idx <- periods[i, "Start"]
+      end_idx <- periods[i, "End"]
+      
+      # Calculate price change during the bubble period
+      start_price <- df_final[[series_name]][start_idx]
+      end_price <- df_final[[series_name]][end_idx]
+      
+      # Assign 1 for increase, 2 for decrease
+      if (end_price > start_price) {
+        bubble_dummies[[series_name]][start_idx:end_idx] <- 1L  # Bubble with price increase
+      } else {
+        bubble_dummies[[series_name]][start_idx:end_idx] <- 2L  # Bubble with price decrease
+      }
+    }
+  }
+}
+
+# --- Alternative: Create separate dummy columns for up/down ---
+# This creates two columns per series: seriesname_up and seriesname_down
+
+bubble_dummies_separate <- df_final %>% select(Date)
+
+for (series_name in series_names) {
+  bubble_dummies_separate[[paste0(series_name, "_up")]] <- 0L
+  bubble_dummies_separate[[paste0(series_name, "_down")]] <- 0L
+}
+
+for (series_name in names(bubble_dates)) {
+  periods <- bubble_dates[[series_name]]
+  
+  if (!is.null(periods) && nrow(periods) > 0) {
+    for (i in 1:nrow(periods)) {
+      start_idx <- periods[i, "Start"]
+      end_idx <- periods[i, "End"]
+      
+      start_price <- df_final[[series_name]][start_idx]
+      end_price <- df_final[[series_name]][end_idx]
+      
+      if (end_price > start_price) {
+        bubble_dummies_separate[[paste0(series_name, "_up")]][start_idx:end_idx] <- 1L
+      } else {
+        bubble_dummies_separate[[paste0(series_name, "_down")]][start_idx:end_idx] <- 1L
+      }
+    }
+  }
+}
+
+# --- 5.2. Prepare Plotting Data with color coding ---
+
+bubble_rects <- map_df(names(bubble_dates), function(name) {
+  periods <- bubble_dates[[name]]
+  
+  if (!is.null(periods) && nrow(periods) > 0) {
+    map_df(1:nrow(periods), function(i) {
+      start_idx <- periods[i, "Start"]
+      end_idx <- periods[i, "End"]
+      
+      start_price <- df_final[[name]][start_idx]
+      end_price <- df_final[[name]][end_idx]
+      
+      tibble(
+        Series = name,
+        xmin = df_final$Date[start_idx],
+        xmax = df_final$Date[end_idx],
+        ymin = -Inf, 
+        ymax = Inf,
+        bubble_type = ifelse(end_price > start_price, "Increase", "Decrease")
+      )
+    })
+  } else {
+    tibble(Series = character(), xmin = as.Date(character()), 
+           xmax = as.Date(character()), ymin = numeric(), ymax = numeric(),
+           bubble_type = character())
+  }
+})
+
+active_series <- if(nrow(bubble_rects) > 0) unique(bubble_rects$Series) else character(0)
+
+# --- 5.3. Final Plotting with color-coded bubbles ---
+
+df_plot_filtered <- df_final %>%
+  pivot_longer(-Date, names_to = "Series", values_to = "Price") %>%
+  filter(Series %in% active_series)
+
+bubble_plot <- ggplot() +
+  # Layer 1: Color-coded shaded areas (green for increase, red for decrease)
+  {if(nrow(bubble_rects) > 0) {
+    geom_rect(data = bubble_rects, 
+              aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, 
+                  fill = bubble_type),
+              alpha = 0.3)
+  }} +
+  scale_fill_manual(values = c("Increase" = "green4", "Decrease" = "red3"),
+                    name = "Bubble Type") +
+  # Layer 2: Black price lines
+  {if(nrow(df_plot_filtered) > 0) {
+    geom_line(data = df_plot_filtered, aes(x = Date, y = Price), color = "black")
+  }} +
+  facet_wrap(~ Series, scales = "free_y", ncol = 2) +
+  theme_minimal() +
+  labs(title = "Markets with Active Speculative Bubbles", 
+       x = NULL, y = "Log Price")
+
+# --- 5.4. Export Results ---
+
+# Save BOTH versions
+write_csv(bubble_dummies, here("data", "bubble_dummies_coded.csv"))  # 0/1/2 format
+write_csv(bubble_dummies_separate, here("data", "bubble_dummies_separate.csv"))  # Separate up/down columns
+
+if(length(active_series) > 0) {
+  ggsave(here("graphsR", "bubbles_detected_color_coded.pdf"), bubble_plot, 
+         width = 10, height = 8)
+  message("Plot saved successfully")
+}
+
+# --- 5.5. Final Verification ---
+message("--- Final Verification ---")
+message("\nBubble dummy (0/1/2 coding) summary:")
+print(head(bubble_dummies, 10))
+
+message("\nValue counts per series (0/1/2 format):")
+for (series in series_names) {
+  vals <- table(bubble_dummies[[series]])
+  if (length(vals) > 1) {
+    message(series, ": ", paste(names(vals), "=", vals, collapse = ", "))
+  }
+}
+
+message("\nSeparate up/down dummies summary:")
+print(head(bubble_dummies_separate, 10))
+
+message("\nBubble counts by type:")
+up_counts <- colSums(bubble_dummies_separate[, grep("_up$", names(bubble_dummies_separate))])
+down_counts <- colSums(bubble_dummies_separate[, grep("_down$", names(bubble_dummies_separate))])
+message("Total bubble-up periods: ", sum(up_counts))
+message("Total bubble-down periods: ", sum(down_counts))
+
 #-------------------------------------------------------------------------------
-# OLD code
+#---- OLD code----
 # Konwersja daty i filtrowanie "Cz??ci Wsp?lnej" (dla ka?dego szeregu oddzielnie)
 df_clean <- df_NI %>%
   select(-c("NIETFN", "NIWUXI")) %>%  #select(-c("NIETFN", "NIWUXI"))
