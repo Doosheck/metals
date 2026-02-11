@@ -65,6 +65,7 @@ vis_dat(df_CO) + labs(title = "Cobalt")
 # --- 2.2. Selection ---
 # Set the metals you want to include based on your vis_dat results.
 # Simply remove a name from this vector to exclude it (e.g., c("NI", "CU", "CO"))
+
 target_metals <- c("NI", "CU", "LI", "CO")
 
 # --- 2.3. Synchronizing Overlapping Dates ---
@@ -74,6 +75,7 @@ target_metals <- c("NI", "CU", "LI", "CO")
 # Required Start: Drops series that start too late (e.g., July 2021)
 
 # Define your target window
+
 required_end_date   <- as.Date("2025-07-21")
 required_start_date <- as.Date("2021-07-19")
 
@@ -150,10 +152,13 @@ est_results <- radf(data_matrix)
 # Since we have a specific sample size (n), we generate Monte Carlo 
 # critical values to perform the statistical test.
 
+# for the first time calculate and save
 n_obs <- nrow(data_matrix)
 mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
 mc_cv
 saveRDS(mc_cv, "mc_cv.rds")
+# for the next time:
+mc_cv <- readRDS("mc_cv.rds")
 
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
@@ -228,7 +233,7 @@ bubble_plot <- ggplot() +
   {if(nrow(bubble_rects) > 0) {
     geom_rect(data = bubble_rects, 
               aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-              fill = "grey", alpha = 0.5)
+              fill = "yellow2", alpha = 0.5)
   }} +
   # Layer 2: Black price lines
   {if(nrow(df_plot_filtered) > 0) {
@@ -236,7 +241,7 @@ bubble_plot <- ggplot() +
   }} +
   facet_wrap(~ Series, scales = "free_y", ncol = 2) +
   theme_minimal() +
-  labs(title = "Markets with Active Speculative Bubbles", 
+  labs(title = "", 
        x = NULL, y = "Log Price")
 
 # --- 5.4. Export Results ---
@@ -252,6 +257,8 @@ if(length(active_series) > 0) {
 } else {
   message("No bubbles detected - no plot generated")
 }
+
+print(bubble_plot)
 
 # --- 5.5. Final Verification ---
 message("--- Final Verification ---")
@@ -272,6 +279,8 @@ print(col_sums[col_sums > 0])  # Only show series with bubbles
 message("\nUnique values in dummy columns:")
 unique_vals <- unique(unlist(bubble_dummies[, -1]))
 message("Values found: ", paste(unique_vals, collapse = ", "))
+
+
 # --- 5.1. Extract Dummies & Identification (Direct Method) ---
 
 # 1. Identify bubble windows for rectangles (start/end dates)
@@ -319,14 +328,14 @@ bubble_plot <- ggplot() +
   {if(length(active_series) > 0) 
     geom_rect(data = filter(bubble_rects, Series %in% active_series), 
               aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-              fill = "grey", alpha = 0.5) 
+              fill = "orange2", alpha = 0.5) 
   } +
   # Layer 2: Black price lines
   geom_line(data = df_plot_filtered, aes(x = Date, y = Price), color = "black") +
-  facet_wrap(~ Series, scales = "free_y", ncol = 2) +
+  facet_wrap(~ Series, scales = "free_y", ncol = 4) +
   theme_minimal() +
-  labs(title = "Markets with Active Speculative Bubbles", 
-       x = NULL, y = "Log Price")
+  labs(title = "", 
+       x = NULL, y = NULL)
 
 # --- 5.4. Export Results ---
 
@@ -340,6 +349,8 @@ message("--- Final Verification ---")
 message("Active Series Found: ", paste(active_series, collapse = ", "))
 # This should now correctly display 0s and 1s
 print(head(bubble_dummies, 5))
+
+print(bubble_plot)
 
 #---- Version with bubble when prices are increasing and decreasing ----
 # --- 5.1. Extract Bubble Information ---
