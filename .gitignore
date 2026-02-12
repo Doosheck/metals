@@ -33,6 +33,8 @@ dist/
 ~$*.xlsx
 *.bak
 .Rproj.user
+.R.history
+.RData
 .lintr
 
 # Office temporary files
