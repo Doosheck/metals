@@ -7,7 +7,10 @@ library(tidyverse)
 library(kableExtra)
 
 
+
 #---- Single metal example ----
+
+
 # --- 1. Filter Cobalt Series ---
 df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
   show_col_types = FALSE, 
@@ -889,6 +892,7 @@ message("4. Landscape: tables/johansen_results_landscape.tex")
 cat("\n=== Table preview ===\n")
 print(latex_table_compact)
 print(latex_landscape)
+<<<<<<< HEAD
 
 cat(latex_output)
 
@@ -1139,3 +1143,5 @@ latex_output_final <- final_table %>%
 
 # Wydrukuj kod
 cat(latex_output_final)
+=======
+>>>>>>> f917b61433878bf006fad3f49fb42982462cf6ae
