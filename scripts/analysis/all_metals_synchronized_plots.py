@@ -10,11 +10,14 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import json
 
+# Get the project root directory (two levels up from this script)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 
 def load_ticker_mappings():
     """Load ticker mappings from JSON file."""
     try:
-        with open('barb_experiments/ticker_mapping.json', 'r') as f:
+        with open(PROJECT_ROOT / 'config' / 'ticker_mapping.json', 'r') as f:
             return json.load(f)
     except FileNotFoundError:
         print("Warning: ticker_mapping.json not found. Using default mappings.")
@@ -165,7 +168,7 @@ def main():
     metals = ['cobalt', 'copper', 'lithium', 'nickel']
     
     # Output directory
-    output_dir = Path('outputs/synchronized_plots')
+    output_dir = PROJECT_ROOT / 'outputs' / 'synchronized_plots'
     output_dir.mkdir(parents=True, exist_ok=True)
     
     for metal in metals:
@@ -175,7 +178,7 @@ def main():
             print(f"{'='*60}")
             
             # Load data (outer data shows actual missing values)
-            file_path = f'data/ALL_{metal}_prices_outer.csv'
+            file_path = PROJECT_ROOT / 'data' / f'ALL_{metal}_prices_outer.csv'
             df = pd.read_csv(file_path)
             df['Date'] = pd.to_datetime(df['Date'])
             df = df.sort_values('Date').reset_index(drop=True)

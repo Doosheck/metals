@@ -6,6 +6,10 @@ import pandas as pd
 import time
 import os
 from bs4 import BeautifulSoup
+from pathlib import Path
+
+# Get the project root directory (two levels up from this script)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 def fetch_metal_prices_firefox(date: str):
@@ -100,9 +104,10 @@ def get_metal_prices(
         for metal, records in metal_prices.items():
             if records:  # Only save if there are records
                 df = pd.DataFrame(records)
-                if not os.path.exists("data"):
-                    os.makedirs("data")
-                filename = f"data/{metal.replace(' ', '_')}_prices_{from_date}_to_{to_date}.csv"
+                data_dir = PROJECT_ROOT / "data"
+                if not os.path.exists(data_dir):
+                    os.makedirs(data_dir)
+                filename = data_dir / f"{metal.replace(' ', '_')}_prices_{from_date}_to_{to_date}.csv"
                 df.to_csv(filename, index=False)
                 print(f"Saved {metal} data to {filename}")
 

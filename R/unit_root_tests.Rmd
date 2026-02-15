@@ -7,7 +7,7 @@ output:
 
 ```{r setup}
 knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
-knitr::opts_knit$set(root.dir = getwd()) 
+knitr::opts_knit$set(root.dir = here::here()) 
 
 # Required packages
 # urca: Most comprehensive and robust package for unit root tests
@@ -20,10 +20,10 @@ lapply(pkgs, library, character.only = TRUE)
 
 ```{r load-data}
 # Load data
-lithium = read.csv("data/ALL_lithium_prices_cubic_spline.csv")
-nickel = read.csv("data/ALL_nickel_prices_cubic_spline.csv")
-cobalt = read.csv("data/ALL_cobalt_prices_cubic_spline.csv")
-copper = read.csv("data/ALL_copper_prices_cubic_spline.csv")
+lithium = read.csv(here::here("data", "ALL_lithium_prices_cubic_spline.csv"))
+nickel = read.csv(here::here("data", "ALL_nickel_prices_cubic_spline.csv"))
+cobalt = read.csv(here::here("data", "ALL_cobalt_prices_cubic_spline.csv"))
+copper = read.csv(here::here("data", "ALL_copper_prices_cubic_spline.csv"))
 
 # Convert Date columns
 lithium$Date <- as.Date(lithium$Date)
@@ -261,7 +261,7 @@ lithium_table <- kable(lithium_summary_table,
   column_spec(9, background = ifelse(lithium_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
 
 # Save as PNG
-save_kable(lithium_table, "outputs/unit_root_tables/lithium_unit_root_summary.png", zoom = 2)
+save_kable(lithium_table, here::here("outputs", "unit_root_tables", "lithium_unit_root_summary.png"), zoom = 2)
 cat("Saved: outputs/unit_root_tables/lithium_unit_root_summary.png\n\n")
 
 # Display in HTML output
@@ -411,7 +411,7 @@ nickel_table <- kable(nickel_summary_table,
   column_spec(9, background = ifelse(nickel_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
 
 # Save as PNG
-save_kable(nickel_table, "outputs/unit_root_tables/nickel_unit_root_summary.png", zoom = 2)
+save_kable(nickel_table, here::here("outputs", "unit_root_tables", "nickel_unit_root_summary.png"), zoom = 2)
 cat("Saved: outputs/unit_root_tables/nickel_unit_root_summary.png\n\n")
 
 # Display in HTML output
@@ -561,7 +561,7 @@ cobalt_table <- kable(cobalt_summary_table,
   column_spec(9, background = ifelse(cobalt_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
 
 # Save as PNG
-save_kable(cobalt_table, "outputs/unit_root_tables/cobalt_unit_root_summary.png", zoom = 2)
+save_kable(cobalt_table, here::here("outputs", "unit_root_tables", "cobalt_unit_root_summary.png"), zoom = 2)
 cat("Saved: outputs/unit_root_tables/cobalt_unit_root_summary.png\n\n")
 
 # Display in HTML output
@@ -711,7 +711,7 @@ copper_table <- kable(copper_summary_table,
   column_spec(9, background = ifelse(copper_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
 
 # Save as PNG
-save_kable(copper_table, "outputs/unit_root_tables/copper_unit_root_summary.png", zoom = 2)
+save_kable(copper_table, here::here("outputs", "unit_root_tables", "copper_unit_root_summary.png"), zoom = 2)
 cat("Saved: outputs/unit_root_tables/copper_unit_root_summary.png\n\n")
 
 # Display in HTML output

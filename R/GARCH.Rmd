@@ -14,10 +14,10 @@ lapply(pkgs, library, character.only = TRUE)
 
 ```{r load-data}
 # Load data
-lithium = read.csv("data/ALL_lithium_prices_cubic_spline.csv")
-nickel = read.csv("data/ALL_nickel_prices_cubic_spline.csv")
-cobalt = read.csv("data/ALL_cobalt_prices_cubic_spline.csv")
-copper = read.csv("data/ALL_copper_prices_cubic_spline.csv")
+lithium = read.csv(here::here("data", "ALL_lithium_prices_cubic_spline.csv"))
+nickel = read.csv(here::here("data", "ALL_nickel_prices_cubic_spline.csv"))
+cobalt = read.csv(here::here("data", "ALL_cobalt_prices_cubic_spline.csv"))
+copper = read.csv(here::here("data", "ALL_copper_prices_cubic_spline.csv"))
 
 # Convert Date columns
 lithium$Date <- as.Date(lithium$Date)
@@ -553,22 +553,22 @@ multifit <- multifit(multispec, nickel_returns_matrix)
 dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
 
 dcc_fit_nickel <- dccfit(dcc_spec, data = as.matrix(nickel_returns_matrix * 100), 
-              solver = "solnp") #“solnp”, “nlminb”, “lbfgs”, “gosolnp”
+              solver = "solnp") #ï¿½solnpï¿½, ï¿½nlminbï¿½, ï¿½lbfgsï¿½, ï¿½gosolnpï¿½
 
 print(dcc_fit_nickel)
 ```
 ```{r DCC_nickel_added_BBS}
-# 1. Wyci¹gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
+# 1. Wyciï¿½gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
 cor_array <- rcor(dcc_fit_nickel) 
 n_obs_model <- dim(cor_array)[3]
-# Wybieramy TYLKO te daty, które odpowiadaj¹ wynikom modelu
+# Wybieramy TYLKO te daty, ktï¿½re odpowiadajï¿½ wynikom modelu
 dates_aligned <- tail(nickel_returns_df$Date, n_obs_model)
 
 # 2. Pobieramy nazwy metali 
 metal_names <- colnames(nickel_returns_matrix) 
 n <- length(metal_names)
 
-# 3. Tworzymy listê wszystkich par (10 kombinacji)
+# 3. Tworzymy listï¿½ wszystkich par (10 kombinacji)
 lista_korelacji <- list()
 k <- 1
 
@@ -583,17 +583,17 @@ for(i in 1:(n-1)) {
   }
 }
 
-# 4. £¹czymy wszystko w jedn¹ d³ug¹ tabelê
+# 4. ï¿½ï¿½czymy wszystko w jednï¿½ dï¿½ugï¿½ tabelï¿½
 df_plot <- bind_rows(lista_korelacji)
 
-# 5. Rysujemy 10 wykresów w siatce (facet_wrap)
+# 5. Rysujemy 10 wykresï¿½w w siatce (facet_wrap)
 dcc_plot_NI <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
   geom_line(color = "darkblue", linewidth = 0.5) +
   facet_wrap(~Para, ncol = 2, scales = "free_y") + # 2 kolumny, 5 wierszy
   scale_x_date(date_labels = "%Y", date_breaks = "2 years") + # Poprawne daty
   theme_minimal(base_size = 12) + 
   labs(
-    title = NULL, # Brak tytu³u g³ównego
+    title = NULL, # Brak tytuï¿½u gï¿½ï¿½wnego
     x = NULL, 
     y = ""
   ) +
@@ -602,7 +602,7 @@ dcc_plot_NI <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
     panel.grid.minor = element_blank()
   )
 
-ggsave(filename = "graphsR/DCC_nickel.pdf", 
+ggsave(filename = here::here("outputs", "figures", "dcc_garch", "DCC_nickel.pdf"), 
        plot = dcc_plot_NI, 
        width = 12, 
        height = 10)
@@ -1001,7 +1001,7 @@ multifit <- multifit(multispec, copper_returns_matrix)
 dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
 
 dcc_fit_copper <- dccfit(dcc_spec, data = as.matrix(copper_returns_matrix * 100), 
-              solver = "solnp") #“solnp”, “nlminb”, “lbfgs”, “gosolnp”
+              solver = "solnp") #ï¿½solnpï¿½, ï¿½nlminbï¿½, ï¿½lbfgsï¿½, ï¿½gosolnpï¿½
 #dcc_fit_copper <- tryCatch({
   #dccfit(dcc_spec, data = copper_returns_matrix, fit.control = list(eval.se = FALSE))
 #}, error = function(e) {
@@ -1014,17 +1014,17 @@ print(dcc_fit_copper)
 
 
 ```{r copper-dcc-garch_added_BBS}
-# 1. Wyci¹gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
+# 1. Wyciï¿½gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
 cor_array <- rcor(dcc_fit_copper) 
 n_obs_model <- dim(cor_array)[3]
-# Wybieramy TYLKO te daty, które odpowiadaj¹ wynikom modelu
+# Wybieramy TYLKO te daty, ktï¿½re odpowiadajï¿½ wynikom modelu
 dates_aligned <- tail(copper_returns_df$Date, n_obs_model)
 
 # 2. Pobieramy nazwy metali 
 metal_names <- colnames(copper_returns_matrix) 
 n <- length(metal_names)
 
-# 3. Tworzymy listê wszystkich par (10 kombinacji)
+# 3. Tworzymy listï¿½ wszystkich par (10 kombinacji)
 lista_korelacji <- list()
 k <- 1
 
@@ -1039,17 +1039,17 @@ for(i in 1:(n-1)) {
   }
 }
 
-# 4. £¹czymy wszystko w jedn¹ d³ug¹ tabelê
+# 4. ï¿½ï¿½czymy wszystko w jednï¿½ dï¿½ugï¿½ tabelï¿½
 df_plot <- bind_rows(lista_korelacji)
 
-# 5. Rysujemy 10 wykresów w siatce (facet_wrap)
+# 5. Rysujemy 10 wykresï¿½w w siatce (facet_wrap)
 dcc_plot_CU <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
   geom_line(color = "darkblue", linewidth = 0.5) +
   facet_wrap(~Para, ncol = 2, scales = "free_y") + # 2 kolumny, 5 wierszy
   scale_x_date(date_labels = "%Y", date_breaks = "2 years") + # Poprawne daty
-  theme_minimal(base_size = 12) + # Mniejsza czcionka, ¿eby 10 wykresów siê zmieœci³o
+  theme_minimal(base_size = 12) + # Mniejsza czcionka, ï¿½eby 10 wykresï¿½w siï¿½ zmieï¿½ciï¿½o
   labs(
-    title = NULL, # Brak tytu³u g³ównego
+    title = NULL, # Brak tytuï¿½u gï¿½ï¿½wnego
     x = NULL, 
     y = ""
   ) +
@@ -1058,7 +1058,7 @@ dcc_plot_CU <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
     panel.grid.minor = element_blank()
   )
 
-ggsave(filename = "graphsR/DCC_copper.pdf", 
+ggsave(filename = here::here("outputs", "figures", "dcc_garch", "DCC_copper.pdf"), 
        plot = dcc_plot_CU, 
        width = 12, 
        height = 10)
@@ -1170,7 +1170,7 @@ tail(dcc_returns, 10)
 
 ```{r ACF_PACF_sq_ret}
 par(mfrow = c(4, 2), mar = c(2, 2, 2, 1))
-# ACF i PACF dla zwrotów:
+# ACF i PACF dla zwrotï¿½w:
 for (col_name in names(dcc_returns)[-1]) {
   acf(dcc_returns[[col_name]], main = paste("ACF:", col_name), lag.max = 20)
   pacf(dcc_returns[[col_name]], main = paste("PACF:", col_name), lag.max = 20)
@@ -1181,7 +1181,7 @@ for (col_name in names(dcc_returns)[-1]) {
 ```{r ACF_PACF_sq_ret}
 
 par(mfrow = c(4, 2), mar = c(2, 2, 2, 1))
-# ACF i PACF dla kwadratów zwrotów:
+# ACF i PACF dla kwadratï¿½w zwrotï¿½w:
 for (col_name in names(dcc_returns)[-1]) {
   acf((dcc_returns[[col_name]])^2, main = paste("ACF:", col_name), lag.max = 20)
   pacf((dcc_returns[[col_name]])^2, main = paste("PACF:", col_name), lag.max = 20)
@@ -1198,10 +1198,10 @@ uspec <- ugarchspec(
   distribution.model = "std"
 )
 
-# 2. Powielenie specyfikacji dla 4 szeregów
+# 2. Powielenie specyfikacji dla 4 szeregï¿½w
 mspec <- multispec(replicate(4, uspec))
 
-# 3. Specyfikacja DCC (DCC(1,1), wielowymiarowy rozk³ad t-Studenta)
+# 3. Specyfikacja DCC (DCC(1,1), wielowymiarowy rozkï¿½ad t-Studenta)
 dspec <- dccspec(mspec, dccOrder = c(1,1), model = "DCC", distribution = "mvt")
 ```
 
@@ -1217,7 +1217,7 @@ print(test_fit)
 fit <- dccfit(dspec, data = as.matrix(dcc_returns[,-1]* 100), solver = "solnp")
 
 # --- WYNIKI ---
-print(fit) # Wyœwietla oszacowania GARCH (Etap 1) i DCC (Etap 2)
+print(fit) # Wyï¿½wietla oszacowania GARCH (Etap 1) i DCC (Etap 2)
 ```
 
 

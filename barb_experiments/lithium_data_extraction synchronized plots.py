@@ -416,7 +416,7 @@ def extract_lithium_data():
     # Load ticker mapping from JSON file
     print("Loading ticker mapping from ticker_mapping.json...")
     try:
-        with open('ticker_mapping.json', 'r') as f:
+        with open('../config/ticker_mapping.json', 'r') as f:
             ticker_mappings = json.load(f)
         lithium_ticker_mapping_raw = ticker_mappings.get('lithium', {})
         
