@@ -3,13 +3,18 @@ The script retrieves the names of the metal and the date range from the filename
 
 import os
 import pandas as pd
+from pathlib import Path
+
+# Get the project root directory (two levels up from this script)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 def merge_csv_files(metal: str, from_date: str, to_date: str):
     """
     Merge all CSV files containing metal prices into a single CSV file.
     """
     # Get a list of all CSV files in the 'data' folder
-    csv_files = [f for f in os.listdir("data") if f.endswith(".csv")]
+    data_dir = PROJECT_ROOT / "data"
+    csv_files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
 
     # Filter the list of CSV files to only include those for the given metal
     metal_files = [f for f in csv_files if metal.replace(' ', '_') in f]
@@ -19,7 +24,7 @@ def merge_csv_files(metal: str, from_date: str, to_date: str):
 
     # Iterate over the metal-specific CSV files and merge them into a single DataFrame
     for file in metal_files:
-        df = pd.read_csv(os.path.join("data", file))
+        df = pd.read_csv(data_dir / file)
         merged_df = pd.concat([merged_df, df])
 
     # Sort the merged DataFrame by date
@@ -27,7 +32,7 @@ def merge_csv_files(metal: str, from_date: str, to_date: str):
     merged_df = merged_df.sort_values("Date")
 
     # Save the merged DataFrame to a new CSV file
-    merged_filename = f"data/{metal.replace(' ', '_')}_prices_{from_date}_to_{to_date}_merged.csv"
+    merged_filename = data_dir / f"{metal.replace(' ', '_')}_prices_{from_date}_to_{to_date}_merged.csv"
     merged_df.to_csv(merged_filename, index=False)
     print(f"Merged data saved to {merged_filename}")
 

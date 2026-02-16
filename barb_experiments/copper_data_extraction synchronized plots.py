@@ -410,7 +410,7 @@ def extract_copper_data():
     # Load ticker mapping from JSON file
     print("Loading ticker mapping from ticker_mapping.json...")
     try:
-        with open('barb_data/ticker_mapping.json', 'r') as f:
+        with open('../config/ticker_mapping.json', 'r') as f:
             ticker_mappings = json.load(f)
         copper_ticker_mapping_raw = ticker_mappings.get('copper', {})
         

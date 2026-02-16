@@ -410,7 +410,7 @@ def extract_nickel_data():
     # Load ticker mapping from JSON file
     print("Loading ticker mapping from ticker_mapping.json...")
     try:
-        with open('barb_data/ticker_mapping.json', 'r') as f:
+        with open('../config/ticker_mapping.json', 'r') as f:
             ticker_mappings = json.load(f)
         nickel_ticker_mapping_raw = ticker_mappings.get('nickel', {})
         

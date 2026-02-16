@@ -10,10 +10,14 @@ import numpy as np
 import json
 from pathlib import Path
 
+# Get project root directory (2 levels up from this script)
+SCRIPT_DIR = Path(__file__).parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+
 def load_ticker_mappings():
     """Load ticker mappings from JSON file."""
     try:
-        with open('barb_experiments/ticker_mapping.json', 'r') as f:
+        with open(PROJECT_ROOT / 'config' / 'ticker_mapping.json', 'r') as f:
             ticker_mappings = json.load(f)
         return ticker_mappings
     except FileNotFoundError:
@@ -25,7 +29,7 @@ def load_ticker_mappings():
 
 def load_metal_data(metal_name, ticker_mappings):
     """Load metal price data and calculate returns."""
-    file_path = f'data/ALL_{metal_name}_prices_cubic_spline.csv'
+    file_path = PROJECT_ROOT / 'data' / f'ALL_{metal_name}_prices_cubic_spline.csv'
 
     try:
         df = pd.read_csv(file_path)

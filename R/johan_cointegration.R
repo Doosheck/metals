@@ -477,4 +477,4 @@ latex_output_final <- final_table %>%
 
 
 cat(latex_output_final)
-writeLines(latex_output_final, here("johansen_results_final.tex"))
+writeLines(latex_output_final, here(\"outputs\", \"tables\", \"johansen_results_final.tex\"))

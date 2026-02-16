@@ -245,7 +245,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--rolling-windows', type=str, default='30,60')
     parser.add_argument('--top-n', type=int, default=5)
     parser.add_argument('--threshold', type=float, default=0.6)
-    parser.add_argument('--mapping-file', type=str, default=os.path.join('barb_experiments', 'ticker_mapping.json'))
+    parser.add_argument('--mapping-file', type=str, default=os.path.join('config', 'ticker_mapping.json'))
     parser.add_argument('--lithium', type=str)
     parser.add_argument('--nickel', type=str)
     parser.add_argument('--cobalt', type=str)

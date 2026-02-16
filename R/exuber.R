@@ -156,9 +156,9 @@ est_results <- radf(data_matrix)
 n_obs <- nrow(data_matrix)
 mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
 mc_cv
-saveRDS(mc_cv, "mc_cv.rds")
+saveRDS(mc_cv, here("outputs", "R_objects", "mc_cv.rds"))
 # for the next time:
-mc_cv <- readRDS("mc_cv.rds")
+mc_cv <- readRDS(here("outputs", "R_objects", "mc_cv.rds"))
 
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
@@ -251,7 +251,7 @@ write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
 
 # Save the plot as a PDF (only if there are active series)
 if(length(active_series) > 0) {
-  ggsave(here("graphsR", "bubbles_detected_only.pdf"), bubble_plot, 
+  ggsave(here("outputs", "figures", "bubble_tests", "bubbles_detected_only.pdf"), bubble_plot, 
          width = 10, height = 8)
   message("Plot saved successfully")
 } else {
@@ -343,7 +343,7 @@ bubble_plot <- ggplot() +
 write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
 
 # Save the plot as a PDF
-ggsave(here("graphsR", "bubbles_detected_only.pdf"), bubble_plot, width = 10, height = 8)
+ggsave(here("outputs", "figures", "bubble_tests", "bubbles_detected_only.pdf"), bubble_plot, width = 10, height = 8)
 
 message("--- Final Verification ---")
 message("Active Series Found: ", paste(active_series, collapse = ", "))
@@ -485,7 +485,7 @@ write_csv(bubble_dummies, here("data", "bubble_dummies_coded.csv"))  # 0/1/2 for
 write_csv(bubble_dummies_separate, here("data", "bubble_dummies_separate.csv"))  # Separate up/down columns
 
 if(length(active_series) > 0) {
-  ggsave(here("graphsR", "bubbles_detected_color_coded.pdf"), bubble_plot, 
+  ggsave(here("outputs", "figures", "bubble_tests", "bubbles_detected_color_coded.pdf"), bubble_plot, 
          width = 10, height = 8)
   message("Plot saved successfully")
 }
@@ -674,17 +674,17 @@ bubble_plot_CO <- ggplot() +
   #axis.text.x = element_text(angle = 45, hjust = 1)   # Opcjonalne pochylenie dat
 )
 # zmienic nazw? pliku banki_metal,pdf
-ggsave(filename = "graphsR/bubble_nickel.pdf", 
+ggsave(filename = here("outputs", "figures", "bubble_tests", "bubble_nickel.pdf"), 
        plot = bubble_plot_NI, 
        width = 12, 
        height = 10)
 
-ggsave(filename = "graphsR/bubble_cobalt.pdf", 
+ggsave(filename = here("outputs", "figures", "bubble_tests", "bubble_cobalt.pdf"), 
        plot = bubble_plot_CO, 
        width = 12, 
        height = 10)
 
-ggsave(filename = "graphsR/bubble_lithium.pdf", 
+ggsave(filename = here("outputs", "figures", "bubble_tests", "bubble_lithium.pdf"), 
        plot = bubble_plot_LI, 
        width = 12, 
        height = 10)
