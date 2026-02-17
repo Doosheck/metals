@@ -250,6 +250,10 @@ readRDS("data/bubble_dummies_df_daly.rds")
 # HH=F: Natural Gas (Henry Hub) - na razie dajê spokoj, dziwnie wyglada
 # QCLN: First Trust NASDAQ Clean Edge Green Energy Index Fund ()
 # Gold Apr 26 (GC=F) yahoo
+# DE000A1EY8J4.SG (yahoo) Solactive Global Lithium Index Stuttgart EUR
+# Solactive Solar Index GTR (DE000SL0EBG1.SG) Stuttgart EUR -little changes over time
+
+
 
 macro_tickers <- c("DCOILWTICO", "DHHNGSP", "DTWEXBGS", "VIXCLS", "DGS10")
 # Download data from FRED
