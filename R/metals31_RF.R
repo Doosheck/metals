@@ -253,6 +253,10 @@ readRDS("data/bubble_dummies_df_daly.rds")
 # DE000A1EY8J4.SG (yahoo) Solactive Global Lithium Index Stuttgart EUR
 # Solactive Solar Index GTR (DE000SL0EBG1.SG) Stuttgart EUR -little changes over time
 
+# China Coal Energy Company Limited (1898.HK)
+
+
+
 
 
 macro_tickers <- c("DCOILWTICO", "DHHNGSP", "DTWEXBGS", "VIXCLS", "DGS10")
@@ -275,7 +279,7 @@ head(df_macro)
 # Note: For Carbon Credits (EUA), Yahoo Finance "KEUA" or "EUA.L" is best
 
 # Yahoo Finance Data Download (Carbon, Brent, MSCI, ...) 
-yahoo_tickers <- c("KEUA", "GC=F", "URTH", "MME=F", "^GSPC", "QCLN")  #"single stock MSCI", "CL=F", 
+yahoo_tickers <- c("KEUA", "GC=F", "URTH", "MME=F", "^GSPC", "QCLN", "1898.HK")  #"single stock MSCI", "CL=F", 
 master_dates <- df_daly %>%
   select(Date) %>%
   rename(date = Date) %>%
