@@ -305,7 +305,8 @@ df_yahoo <- df_yahoo %>%
     MSCI_ETF = URTH, 
     MSCI_EM = `MME=F`,
     SP500 = `^GSPC`,
-    QCLN = QCLN
+    QCLN = QCLN, 
+    COAL = "1898.HK"
   ) %>%
   
   # Sort to be safe
@@ -329,7 +330,7 @@ df_merged_raw <- df_daly %>%
   select(-any_of(cols_to_exclude)) %>%
   arrange(Date)
 
-summary(df_merged_raw )
+summary(df_merged_raw)
 
 vars_to_interpolate <- df_merged_raw %>%
   select(where(is.numeric)) %>%
