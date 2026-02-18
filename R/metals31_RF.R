@@ -247,14 +247,14 @@ readRDS("data/bubble_dummies_df_daly.rds")
 # BZT=F = Brent Crude Oil Futures
 # URTH  = MSCI World ETF (Proxy for MSCI World Index, which is often restricted)
 # CL=F: Brent Crude Oil Last Day Future 
-# HH=F: Natural Gas (Henry Hub) - na razie dajê spokoj, dziwnie wyglada
+# HH=F: Natural Gas (Henry Hub) - strange
 # QCLN: First Trust NASDAQ Clean Edge Green Energy Index Fund ()
 # Gold Apr 26 (GC=F) yahoo
 # DE000A1EY8J4.SG (yahoo) Solactive Global Lithium Index Stuttgart EUR
 # Solactive Solar Index GTR (DE000SL0EBG1.SG) Stuttgart EUR -little changes over time
 
 # China Coal Energy Company Limited (1898.HK)
-
+# Peabody Energy Corporation (BTU) NYSE starts in 2017 May
 
 
 
@@ -279,7 +279,7 @@ head(df_macro)
 # Note: For Carbon Credits (EUA), Yahoo Finance "KEUA" or "EUA.L" is best
 
 # Yahoo Finance Data Download (Carbon, Brent, MSCI, ...) 
-yahoo_tickers <- c("KEUA", "GC=F", "URTH", "MME=F", "^GSPC", "QCLN", "1898.HK")  #"single stock MSCI", "CL=F", 
+yahoo_tickers <- c("KEUA", "GC=F", "URTH", "MME=F", "^GSPC", "QCLN", "1898.HK", "BTU")  #"single stock MSCI", "CL=F", 
 master_dates <- df_daly %>%
   select(Date) %>%
   rename(date = Date) %>%
@@ -306,7 +306,8 @@ df_yahoo <- df_yahoo %>%
     MSCI_EM = `MME=F`,
     SP500 = `^GSPC`,
     QCLN = QCLN, 
-    COAL = "1898.HK"
+    C_CHR = "1898.HK",
+    C_US = "BTU"
   ) %>%
   
   # Sort to be safe
@@ -358,6 +359,11 @@ df_master <- df_final %>%
   drop_na() # Remove rows where we might miss dummies or macro data
 
 print(colnames(df_master))
+df_master <- df_master %>%
+  rename_with(~ gsub("_dummy", "_BD", .x), ends_with("_dummy"))
+
+# SprawdŸ nowe nazwy
+print(names(df_master))
 summary(df_master)
 saveRDS(df_master, "R/df_master.rds")
 
