@@ -480,19 +480,19 @@ print(names(df_master))
 summary(df_master)
 saveRDS(df_master, "R/df_master.rds")
 
-df_master <- df_master %>%
+df_master_plot <- df_master %>%
   mutate(across(
     .cols = where(is.numeric) & !ends_with("dummy") & !ends_with("DB"), 
     .fns = ~ ifelse(. <= 0, 0.001, .)
   ))
 
 # Verification: Check if any zeros/negatives remain in the price columns
-summary(select(df_master, where(is.numeric), -ends_with("dummy")))
+summary(select(df_master_plot, where(is.numeric), -ends_with("BD")))
 cat("Data cleaning complete. All non-positive values replaced with 0.001.\n")
 
 ###---- Plots of series ----
 
-vars_to_plot <- df_master %>%
+vars_to_plot <- df_master_plot %>%
   select(where(is.numeric)) %>%
   select(-any_of(c("Date", "date"))) %>%
   select(-ends_with("dummy")) %>%  # Standard exclusion
@@ -502,7 +502,7 @@ vars_to_plot <- df_master %>%
 cat(paste("Plotting", length(vars_to_plot), "series in a grid...\n"))
 
 # 2. Reshape to Long Format
-df_long <- df_master %>%
+df_long <- df_master_plot %>%
   select(Date, all_of(vars_to_plot)) %>%
   pivot_longer(
     cols = -Date, 
@@ -901,8 +901,9 @@ cat("Done! Check the 'plots' folder.")
 #   print(lit_result$plot) # This should now show ONLY the Bubble drivers (Single panel)
 # }
 
-##---- Balanced Accuracy----
-
+##---- Balanced Accuracy and AUC-ROC----
+install.packages("pROC")
+library(pROC)
 
 # --- 1. Initialize Storage ---
 performance_table <- data.frame(
@@ -911,6 +912,7 @@ performance_table <- data.frame(
   Sensitivity = numeric(), 
   Specificity = numeric(), 
   Precision = numeric(),
+  AUC = numeric(),         
   Bubbles_Detected = character(), # Changed to character for "150/200" format
   stringsAsFactors = FALSE
 )
@@ -932,6 +934,8 @@ for (m_name in names(ml_results)) {
     if (!is.null(df_check)) {
       true_y <- df_check$Target_Bubble
       prob_bubble <- model_rf$predictions[, 2] 
+      roc_obj <- roc(true_y, prob_bubble, quiet = TRUE)
+      auc_val <- as.numeric(auc(roc_obj))
       pred_class <- ifelse(prob_bubble > 0.5, 1, 0)
       
       # Confusion Matrix Counts
@@ -957,6 +961,7 @@ for (m_name in names(ml_results)) {
         Sensitivity = sens,
         Specificity = spec,
         Precision = prec,
+        AUC = auc_val,
         Bubbles_Detected = bubbles_str
       ))
     }
@@ -966,14 +971,24 @@ for (m_name in names(ml_results)) {
 # --- 3. Convert to LaTeX using xtable ---
 
 # Rename columns for the paper (cleaner headers)
-colnames(performance_table) <- c("Metal", "Bal. Accuracy", "Sensitivity", "Specificity", "Precision", "Bubbles (Found/Total)")
+colnames(performance_table) <- c("Metal", "Bal_Accuracy", "Sensitivity", 
+                                 "Specificity", "Precision", "AUC", "Bubbles")
+
+# performance_table <- performance_table %>%
+#   mutate(
+#     Balanced_Accuracy = ifelse(is.nan(Bal_Accuracy), 0, Bal_Accuracy),
+#     Sensitivity       = ifelse(is.nan(Sensitivity), 0, Sensitivity),
+#     Specificity       = ifelse(is.nan(Specificity), 0, Specificity),
+#     Precision         = ifelse(is.nan(Precision), 0, Precision),
+#     AUC               = ifelse(is.nan(AUC), 0, AUC) 
+#   )
 
 # Create the xtable object
 latex_obj <- xtable(performance_table, 
                     caption = "Random Forest Model Performance Metrics", 
                     label = "tab:rf_performance",
-                    digits = 3,      # Number of decimal places
-                    align = "lcccccc") # Alignment: Left, Center, Center...
+                    digits = 3, 
+                    align = "llcccccc")
 
 # Option A: Print to Console (Clean copy-paste)
 print(latex_obj, 
