@@ -107,8 +107,8 @@ def create_synchronized_missing_value_plot(df, metal_name, output_dir, ticker_ma
                     # Red markers on bottom of plot for missing values
                     ax.scatter(missing_data['Date'], 
                              [y_min] * len(missing_data), 
-                             color='red', marker='|', s=100, alpha=0.8,
-                             linewidths=2)
+                             color='red', marker='|', s=75, alpha=0.8,
+                             linewidths=1)
                 
                 # Set title with ticker name
                 ticker_label = col  # CSV already has ticker codes as column names
