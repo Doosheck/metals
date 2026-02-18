@@ -1,0 +1,1639 @@
+---
+title: "Unit Root Tests for Metals Price Series"
+output: 
+  html_document:
+    self_contained: true
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+knitr::opts_knit$set(root.dir = here::here()) 
+
+# Required packages
+# urca: Most comprehensive and robust package for unit root tests
+# tseries: Additional unit root tests
+pkgs <- c("urca", "tseries", "dplyr", "knitr")
+missing <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+if(length(missing)) install.packages(missing)
+lapply(pkgs, library, character.only = TRUE)
+```
+
+```{r load-data}
+# Load data
+lithium = read.csv(here::here("data", "ALL_lithium_prices_cubic_spline.csv"))
+nickel = read.csv(here::here("data", "ALL_nickel_prices_cubic_spline.csv"))
+cobalt = read.csv(here::here("data", "ALL_cobalt_prices_cubic_spline.csv"))
+copper = read.csv(here::here("data", "ALL_copper_prices_cubic_spline.csv"))
+
+# Convert Date columns
+lithium$Date <- as.Date(lithium$Date)
+nickel$Date  <- as.Date(nickel$Date)
+cobalt$Date  <- as.Date(cobalt$Date)
+copper$Date  <- as.Date(copper$Date)
+
+# Remove LISAME from lithium
+lithium <- subset(lithium, select = -LISAME)
+
+# Get price columns
+lithium_prices <- lithium[, -1]
+nickel_prices <- nickel[, -1]
+cobalt_prices <- cobalt[, -1]
+copper_prices <- copper[, -1]
+
+cat("\n=== DATA LOADED ===\n")
+cat("Lithium series:", ncol(lithium_prices), "\n")
+cat("Nickel series:", ncol(nickel_prices), "\n")
+cat("Cobalt series:", ncol(cobalt_prices), "\n")
+cat("Copper series:", ncol(copper_prices), "\n\n")
+
+# Calculate returns (percentage returns)
+calculate_returns <- function(prices) {
+  returns <- lapply(1:ncol(prices), function(i) {
+    x <- prices[, i]
+    x <- na.omit(x)
+    ret <- (diff(x) / x[-length(x)]) * 100  # Simple returns in percentage
+    return(ret)
+  })
+  names(returns) <- colnames(prices)
+  return(returns)
+}
+
+lithium_returns <- calculate_returns(lithium_prices)
+nickel_returns <- calculate_returns(nickel_prices)
+cobalt_returns <- calculate_returns(cobalt_prices)
+copper_returns <- calculate_returns(copper_prices)
+
+cat("\n=== RETURNS CALCULATED ===\n")
+cat("Returns are calculated as: (Price_t - Price_{t-1}) / Price_{t-1} * 100\n")
+cat("This gives percentage simple returns\n")
+cat("Lithium return series:", length(lithium_returns), "\n")
+cat("Nickel return series:", length(nickel_returns), "\n")
+cat("Cobalt return series:", length(cobalt_returns), "\n")
+cat("Copper return series:", length(copper_returns), "\n\n")
+```
+
+```{r helper-functions}
+# Helper function to interpret unit root test results
+interpret_adf <- function(test_result, series_name) {
+  cat("\n--- INTERPRETATION for", series_name, "---\n")
+  
+  test_stat <- as.numeric(test_result@teststat)[1]
+  crit_vals <- test_result@cval
+  
+  cat("Test Statistic:", round(test_stat, 4), "\n")
+  cat("Critical Values: 1%=", round(crit_vals[1], 4), 
+      ", 5%=", round(crit_vals[2], 4), 
+      ", 10%=", round(crit_vals[3], 4), "\n")
+  
+  if(test_stat < crit_vals[3]) {
+    cat("RESULT: REJECT null hypothesis at 10% level\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  } else if(test_stat < crit_vals[2]) {
+    cat("RESULT: REJECT null hypothesis at 5% level\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  } else if(test_stat < crit_vals[1]) {
+    cat("RESULT: REJECT null hypothesis at 1% level\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+}
+
+interpret_kpss <- function(test_result, series_name) {
+  cat("\n--- INTERPRETATION for", series_name, "---\n")
+  
+  test_stat <- as.numeric(test_result@teststat)[1]
+  crit_vals <- test_result@cval
+  
+  cat("Test Statistic:", round(test_stat, 4), "\n")
+  cat("Critical Values: 10%=", round(crit_vals[1], 4), 
+      ", 5%=", round(crit_vals[2], 4), 
+      ", 2.5%=", round(crit_vals[3], 4),
+      ", 1%=", round(crit_vals[4], 4), "\n")
+  
+  if(test_stat > crit_vals[4]) {
+    cat("RESULT: REJECT null hypothesis at 1% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else if(test_stat > crit_vals[3]) {
+    cat("RESULT: REJECT null hypothesis at 2.5% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else if(test_stat > crit_vals[2]) {
+    cat("RESULT: REJECT null hypothesis at 5% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else if(test_stat > crit_vals[1]) {
+    cat("RESULT: REJECT null hypothesis at 10% level\n")
+    cat("CONCLUSION: Series", series_name, "is NON-STATIONARY (has unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series", series_name, "is STATIONARY (no unit root)\n")
+  }
+}
+```
+
+# LITHIUM UNIT ROOT TESTS
+
+```{r lithium-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    LITHIUM RETURNS - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+lithium_results <- list()
+
+for(i in 1:length(lithium_returns)) {
+  series_name <- names(lithium_returns)[i]
+  series_data <- lithium_returns[[i]]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: LITHIUM -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. Augmented Dickey-Fuller (ADF) Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Lithium", series_name))
+  
+  # 2. Phillips-Perron (PP) Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Lithium", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("NOTE: This test has OPPOSITE hypotheses compared to ADF and PP tests!\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Lithium", series_name))
+  
+  # 4. DF-GLS Test (Elliott-Rothenberg-Stock)
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n")
+  cat("NOTE: This is an improved version of ADF with better power\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Lithium", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Lithium", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # Store results
+  lithium_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+
+# Create summary table for Lithium
+lithium_summary_table <- data.frame(
+  Series = names(lithium_results),
+  ADF_Stat = sapply(lithium_results, function(x) round(x$adf@teststat[1], 4)),
+  ADF_Result = sapply(lithium_results, function(x) ifelse(x$adf@teststat[1] < x$adf@cval[3], "Stationary", "Non-Stationary")),
+  PP_Stat = sapply(lithium_results, function(x) round(x$pp@teststat[1], 4)),
+  PP_Result = sapply(lithium_results, function(x) ifelse(x$pp@teststat[1] < x$pp@cval[3], "Stationary", "Non-Stationary")),
+  KPSS_Stat = sapply(lithium_results, function(x) round(x$kpss@teststat[1], 4)),
+  KPSS_Result = sapply(lithium_results, function(x) ifelse(x$kpss@teststat[1] > x$kpss@cval[2], "Non-Stationary", "Stationary")),
+  DFGLS_Stat = sapply(lithium_results, function(x) round(x$ers@teststat[1], 4)),
+  DFGLS_Result = sapply(lithium_results, function(x) ifelse(x$ers@teststat[1] < x$ers@cval[3], "Stationary", "Non-Stationary"))
+)
+
+cat("\n=== LITHIUM UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
+
+# Create HTML table with color coding
+library(kableExtra)
+library(webshot)
+
+# Create output directory
+dir.create("outputs/unit_root_tables", showWarnings = FALSE, recursive = TRUE)
+
+# Generate and save table as PNG
+lithium_table <- kable(lithium_summary_table, 
+      caption = "Lithium Returns: Unit Root Test Results Summary",
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
+  column_spec(3, background = ifelse(lithium_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(5, background = ifelse(lithium_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(7, background = ifelse(lithium_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(9, background = ifelse(lithium_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(lithium_table, here::here("outputs", "unit_root_tables", "lithium_unit_root_summary.png"), zoom = 2)
+cat("Saved: outputs/unit_root_tables/lithium_unit_root_summary.png\n\n")
+
+# Display in HTML output
+lithium_table
+
+# Plot test statistics
+par(mfrow=c(2,2), mar=c(8,4,2,1))
+barplot(lithium_summary_table$ADF_Stat, names.arg=lithium_summary_table$Series, 
+        las=2, col="steelblue", main="ADF Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(lithium_results, function(x) x$adf@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(lithium_summary_table$PP_Stat, names.arg=lithium_summary_table$Series,
+        las=2, col="darkgreen", main="Phillips-Perron Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(lithium_results, function(x) x$pp@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(lithium_summary_table$KPSS_Stat, names.arg=lithium_summary_table$Series,
+        las=2, col="coral", main="KPSS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(lithium_results, function(x) x$kpss@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(lithium_summary_table$DFGLS_Stat, names.arg=lithium_summary_table$Series,
+        las=2, col="purple", main="DF-GLS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(lithium_results, function(x) x$ers@cval[2])), col="red", lty=2, lwd=2)
+par(mfrow=c(1,1))
+```
+
+# NICKEL UNIT ROOT TESTS
+
+```{r nickel-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    NICKEL RETURNS - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+nickel_results <- list()
+
+for(i in 1:length(nickel_returns)) {
+  series_name <- names(nickel_returns)[i]
+  series_data <- nickel_returns[[i]]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: NICKEL -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. ADF Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Nickel", series_name))
+  
+  # 2. PP Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Nickel", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Nickel", series_name))
+  
+  # 4. DF-GLS Test
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Nickel", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Nickel", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  nickel_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+
+# Create summary table for Nickel
+nickel_summary_table <- data.frame(
+  Series = names(nickel_results),
+  ADF_Stat = sapply(nickel_results, function(x) round(x$adf@teststat[1], 4)),
+  ADF_Result = sapply(nickel_results, function(x) ifelse(x$adf@teststat[1] < x$adf@cval[3], "Stationary", "Non-Stationary")),
+  PP_Stat = sapply(nickel_results, function(x) round(x$pp@teststat[1], 4)),
+  PP_Result = sapply(nickel_results, function(x) ifelse(x$pp@teststat[1] < x$pp@cval[3], "Stationary", "Non-Stationary")),
+  KPSS_Stat = sapply(nickel_results, function(x) round(x$kpss@teststat[1], 4)),
+  KPSS_Result = sapply(nickel_results, function(x) ifelse(x$kpss@teststat[1] > x$kpss@cval[2], "Non-Stationary", "Stationary")),
+  DFGLS_Stat = sapply(nickel_results, function(x) round(x$ers@teststat[1], 4)),
+  DFGLS_Result = sapply(nickel_results, function(x) ifelse(x$ers@teststat[1] < x$ers@cval[3], "Stationary", "Non-Stationary"))
+)
+
+cat("\n=== NICKEL UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
+
+# Generate and save table as PNG
+nickel_table <- kable(nickel_summary_table,
+      caption = "Nickel Returns: Unit Root Test Results Summary",
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
+  column_spec(3, background = ifelse(nickel_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(5, background = ifelse(nickel_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(7, background = ifelse(nickel_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(9, background = ifelse(nickel_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(nickel_table, here::here("outputs", "unit_root_tables", "nickel_unit_root_summary.png"), zoom = 2)
+cat("Saved: outputs/unit_root_tables/nickel_unit_root_summary.png\n\n")
+
+# Display in HTML output
+nickel_table
+
+# Plot test statistics
+par(mfrow=c(2,2), mar=c(8,4,2,1))
+barplot(nickel_summary_table$ADF_Stat, names.arg=nickel_summary_table$Series,
+        las=2, col="steelblue", main="ADF Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(nickel_results, function(x) x$adf@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(nickel_summary_table$PP_Stat, names.arg=nickel_summary_table$Series,
+        las=2, col="darkgreen", main="Phillips-Perron Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(nickel_results, function(x) x$pp@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(nickel_summary_table$KPSS_Stat, names.arg=nickel_summary_table$Series,
+        las=2, col="coral", main="KPSS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(nickel_results, function(x) x$kpss@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(nickel_summary_table$DFGLS_Stat, names.arg=nickel_summary_table$Series,
+        las=2, col="purple", main="DF-GLS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(nickel_results, function(x) x$ers@cval[2])), col="red", lty=2, lwd=2)
+par(mfrow=c(1,1))
+```
+
+# COBALT UNIT ROOT TESTS
+
+```{r cobalt-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    COBALT RETURNS - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+cobalt_results <- list()
+
+for(i in 1:length(cobalt_returns)) {
+  series_name <- names(cobalt_returns)[i]
+  series_data <- cobalt_returns[[i]]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: COBALT -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. ADF Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Cobalt", series_name))
+  
+  # 2. PP Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Cobalt", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Cobalt", series_name))
+  
+  # 4. DF-GLS Test
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Cobalt", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Cobalt", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  cobalt_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+
+# Create summary table for Cobalt
+cobalt_summary_table <- data.frame(
+  Series = names(cobalt_results),
+  ADF_Stat = sapply(cobalt_results, function(x) round(x$adf@teststat[1], 4)),
+  ADF_Result = sapply(cobalt_results, function(x) ifelse(x$adf@teststat[1] < x$adf@cval[3], "Stationary", "Non-Stationary")),
+  PP_Stat = sapply(cobalt_results, function(x) round(x$pp@teststat[1], 4)),
+  PP_Result = sapply(cobalt_results, function(x) ifelse(x$pp@teststat[1] < x$pp@cval[3], "Stationary", "Non-Stationary")),
+  KPSS_Stat = sapply(cobalt_results, function(x) round(x$kpss@teststat[1], 4)),
+  KPSS_Result = sapply(cobalt_results, function(x) ifelse(x$kpss@teststat[1] > x$kpss@cval[2], "Non-Stationary", "Stationary")),
+  DFGLS_Stat = sapply(cobalt_results, function(x) round(x$ers@teststat[1], 4)),
+  DFGLS_Result = sapply(cobalt_results, function(x) ifelse(x$ers@teststat[1] < x$ers@cval[3], "Stationary", "Non-Stationary"))
+)
+
+cat("\n=== COBALT UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
+
+# Generate and save table as PNG
+cobalt_table <- kable(cobalt_summary_table,
+      caption = "Cobalt Returns: Unit Root Test Results Summary",
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
+  column_spec(3, background = ifelse(cobalt_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(5, background = ifelse(cobalt_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(7, background = ifelse(cobalt_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(9, background = ifelse(cobalt_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(cobalt_table, here::here("outputs", "unit_root_tables", "cobalt_unit_root_summary.png"), zoom = 2)
+cat("Saved: outputs/unit_root_tables/cobalt_unit_root_summary.png\n\n")
+
+# Display in HTML output
+cobalt_table
+
+# Plot test statistics
+par(mfrow=c(2,2), mar=c(8,4,2,1))
+barplot(cobalt_summary_table$ADF_Stat, names.arg=cobalt_summary_table$Series,
+        las=2, col="steelblue", main="ADF Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(cobalt_results, function(x) x$adf@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(cobalt_summary_table$PP_Stat, names.arg=cobalt_summary_table$Series,
+        las=2, col="darkgreen", main="Phillips-Perron Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(cobalt_results, function(x) x$pp@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(cobalt_summary_table$KPSS_Stat, names.arg=cobalt_summary_table$Series,
+        las=2, col="coral", main="KPSS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(cobalt_results, function(x) x$kpss@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(cobalt_summary_table$DFGLS_Stat, names.arg=cobalt_summary_table$Series,
+        las=2, col="purple", main="DF-GLS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(cobalt_results, function(x) x$ers@cval[2])), col="red", lty=2, lwd=2)
+par(mfrow=c(1,1))
+```
+
+# COPPER UNIT ROOT TESTS
+
+```{r copper-unit-root}
+cat("\n")
+cat("================================================================================\n")
+cat("                    COPPER RETURNS - UNIT ROOT TESTS\n")
+cat("================================================================================\n\n")
+
+copper_results <- list()
+
+for(i in 1:length(copper_returns)) {
+  series_name <- names(copper_returns)[i]
+  series_data <- copper_returns[[i]]
+  series_data <- na.omit(series_data)
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERIES: COPPER -", series_name, "\n")
+  cat("========================================\n\n")
+  
+  # 1. ADF Test
+  cat("--- 1. AUGMENTED DICKEY-FULLER (ADF) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  adf_test <- ur.df(series_data, type = "trend", lags = 5, selectlags = "AIC")
+  print(summary(adf_test))
+  interpret_adf(adf_test, paste("Copper", series_name))
+  
+  # 2. PP Test
+  cat("\n\n--- 2. PHILLIPS-PERRON (PP) TEST ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  pp_test <- ur.pp(series_data, type = "Z-tau", model = "trend", lags = "short")
+  print(summary(pp_test))
+  
+  cat("\n--- INTERPRETATION for Copper", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(pp_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(pp_test@cval[1], 4), 
+      ", 5%=", round(pp_test@cval[2], 4), 
+      ", 10%=", round(pp_test@cval[3], 4), "\n")
+  
+  if(as.numeric(pp_test@teststat)[1] < pp_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  # 3. KPSS Test
+  cat("\n\n--- 3. KPSS STATIONARITY TEST ---\n")
+  cat("Null Hypothesis: Series is stationary\n")
+  cat("Alternative Hypothesis: Series has a unit root (non-stationary)\n\n")
+  
+  kpss_test <- ur.kpss(series_data, type = "tau", lags = "short")
+  print(summary(kpss_test))
+  interpret_kpss(kpss_test, paste("Copper", series_name))
+  
+  # 4. DF-GLS Test
+  cat("\n\n--- 4. DF-GLS TEST (Elliott-Rothenberg-Stock) ---\n")
+  cat("Null Hypothesis: Series has a unit root (non-stationary)\n")
+  cat("Alternative Hypothesis: Series is stationary\n\n")
+  
+  ers_test <- ur.ers(series_data, type = "DF-GLS", model = "trend", lag.max = 5)
+  print(summary(ers_test))
+  
+  cat("\n--- INTERPRETATION for Copper", series_name, "---\n")
+  cat("Test Statistic:", round(as.numeric(ers_test@teststat)[1], 4), "\n")
+  cat("Critical Values: 1%=", round(ers_test@cval[1], 4), 
+      ", 5%=", round(ers_test@cval[2], 4), 
+      ", 10%=", round(ers_test@cval[3], 4), "\n")
+  
+  if(as.numeric(ers_test@teststat)[1] < ers_test@cval[3]) {
+    cat("RESULT: REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "is STATIONARY (no unit root)\n")
+  } else {
+    cat("RESULT: FAIL TO REJECT null hypothesis\n")
+    cat("CONCLUSION: Series Copper", series_name, "has a UNIT ROOT (non-stationary)\n")
+  }
+  
+  copper_results[[series_name]] <- list(
+    adf = adf_test,
+    pp = pp_test,
+    kpss = kpss_test,
+    ers = ers_test
+  )
+  
+  cat("\n")
+  cat("========================================\n\n")
+}
+
+# Create summary table for Copper
+copper_summary_table <- data.frame(
+  Series = names(copper_results),
+  ADF_Stat = sapply(copper_results, function(x) round(x$adf@teststat[1], 4)),
+  ADF_Result = sapply(copper_results, function(x) ifelse(x$adf@teststat[1] < x$adf@cval[3], "Stationary", "Non-Stationary")),
+  PP_Stat = sapply(copper_results, function(x) round(x$pp@teststat[1], 4)),
+  PP_Result = sapply(copper_results, function(x) ifelse(x$pp@teststat[1] < x$pp@cval[3], "Stationary", "Non-Stationary")),
+  KPSS_Stat = sapply(copper_results, function(x) round(x$kpss@teststat[1], 4)),
+  KPSS_Result = sapply(copper_results, function(x) ifelse(x$kpss@teststat[1] > x$kpss@cval[2], "Non-Stationary", "Stationary")),
+  DFGLS_Stat = sapply(copper_results, function(x) round(x$ers@teststat[1], 4)),
+  DFGLS_Result = sapply(copper_results, function(x) ifelse(x$ers@teststat[1] < x$ers@cval[3], "Stationary", "Non-Stationary"))
+)
+
+cat("\n=== COPPER UNIT ROOT TESTS SUMMARY TABLE ===\n\n")
+
+# Generate and save table as PNG
+copper_table <- kable(copper_summary_table,
+      caption = "Copper Returns: Unit Root Test Results Summary",
+      col.names = c("Series", "ADF Stat", "ADF", "PP Stat", "PP", "KPSS Stat", "KPSS", "DF-GLS Stat", "DF-GLS"),
+      format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 14) %>%
+  column_spec(3, background = ifelse(copper_summary_table$ADF_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(5, background = ifelse(copper_summary_table$PP_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(7, background = ifelse(copper_summary_table$KPSS_Result == "Stationary", "#90EE90", "#FFB6C6")) %>%
+  column_spec(9, background = ifelse(copper_summary_table$DFGLS_Result == "Stationary", "#90EE90", "#FFB6C6"))
+
+# Save as PNG
+save_kable(copper_table, here::here("outputs", "unit_root_tables", "copper_unit_root_summary.png"), zoom = 2)
+cat("Saved: outputs/unit_root_tables/copper_unit_root_summary.png\n\n")
+
+# Display in HTML output
+copper_table
+
+# Plot test statistics
+par(mfrow=c(2,2), mar=c(8,4,2,1))
+barplot(copper_summary_table$ADF_Stat, names.arg=copper_summary_table$Series,
+        las=2, col="steelblue", main="ADF Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(copper_results, function(x) x$adf@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(copper_summary_table$PP_Stat, names.arg=copper_summary_table$Series,
+        las=2, col="darkgreen", main="Phillips-Perron Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(copper_results, function(x) x$pp@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(copper_summary_table$KPSS_Stat, names.arg=copper_summary_table$Series,
+        las=2, col="coral", main="KPSS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(copper_results, function(x) x$kpss@cval[2])), col="red", lty=2, lwd=2)
+
+barplot(copper_summary_table$DFGLS_Stat, names.arg=copper_summary_table$Series,
+        las=2, col="purple", main="DF-GLS Test Statistics", ylab="Test Statistic",
+        cex.names=0.7)
+abline(h=mean(sapply(copper_results, function(x) x$ers@cval[2])), col="red", lty=2, lwd=2)
+par(mfrow=c(1,1))
+```
+
+# DCC-GARCH MODEL SELECTION
+
+```{r dcc-setup, message=FALSE, warning=FALSE}
+# NOT NEEDED
+cat("\n")
+cat("================================================================================\n")
+cat("              DCC-GARCH MODEL SELECTION AND ESTIMATION\n")
+cat("================================================================================\n\n")
+
+# Install and load ConnectednessApproach package
+if (!require("ConnectednessApproach", quietly = TRUE)) {
+  if (!require("devtools", quietly = TRUE)) {
+    install.packages("devtools")
+  }
+  library(devtools)
+  install_github("GabauerDavid/ConnectednessApproach")
+}
+
+library(ConnectednessApproach)
+library(xts)
+library(knitr)
+
+cat("=== PACKAGE LOADED ===\n")
+cat("ConnectednessApproach: DCC-GARCH model selection and estimation\n")
+cat("Function: DCCGARCHselection() - Selects best DCC-GARCH specification\n\n")
+```
+
+```{r prepare-dcc-data}
+library(xts)
+library(knitr)
+cat("\n=== PREPARING DATA FOR DCC-GARCH ===\n\n")
+
+# Prepare return data as xts objects with proper dates
+prepare_return_xts <- function(returns_list, dates) {
+  n_series <- length(returns_list)
+  series_names <- names(returns_list)
+  min_len <- min(sapply(returns_list, length))
+  
+  return_matrix <- matrix(NA, nrow = min_len, ncol = n_series)
+  colnames(return_matrix) <- series_names
+  
+  for(i in 1:n_series) {
+    return_matrix[, i] <- returns_list[[i]][1:min_len]
+  }
+  
+  # Create xts object with proper dates (skip first date due to differencing)
+  return_xts <- xts(return_matrix, order.by = dates[2:(min_len+1)])
+  
+  # # Clean data: remove any NAs, Inf, or extreme values
+  # return_xts <- na.omit(return_xts)
+  
+  # # Replace infinite values with NA and remove
+  # return_xts[is.infinite(return_xts)] <- NA
+  # return_xts <- na.omit(return_xts)
+  
+  # # Remove extreme outliers (beyond 10 standard deviations)
+  # for(i in 1:ncol(return_xts)) {
+  #   col_mean <- mean(return_xts[,i], na.rm=TRUE)
+  #   col_sd <- sd(return_xts[,i], na.rm=TRUE)
+  #   outliers <- abs(return_xts[,i] - col_mean) > 10 * col_sd
+  #   if(any(outliers, na.rm=TRUE)) {
+  #     return_xts[outliers, i] <- NA
+  #   }
+  # }
+  # return_xts <- na.omit(return_xts)
+  
+  return(return_xts)
+}
+
+# Prepare data for each metal
+lithium_xts <- prepare_return_xts(lithium_returns, lithium$Date)
+nickel_xts <- prepare_return_xts(nickel_returns, nickel$Date)
+cobalt_xts <- prepare_return_xts(cobalt_returns, cobalt$Date)
+copper_xts <- prepare_return_xts(copper_returns, copper$Date)
+
+cat("Data prepared and cleaned as xts objects:\n")
+cat("  Lithium:", nrow(lithium_xts), "observations x", ncol(lithium_xts), "series\n")
+cat("  Nickel:", nrow(nickel_xts), "observations x", ncol(nickel_xts), "series\n")
+cat("  Cobalt:", nrow(cobalt_xts), "observations x", ncol(cobalt_xts), "series\n")
+cat("  Copper:", nrow(copper_xts), "observations x", ncol(copper_xts), "series\n")
+```
+
+```{r diagnose-data}
+cat("\n=== DATA DIAGNOSTICS ===\n\n")
+
+# Function to diagnose data quality
+diagnose_data <- function(xts_data, name) {
+  cat("\n--- ", name, " ---\n")
+  cat("  Dimensions:", nrow(xts_data), "rows x", ncol(xts_data), "columns\n")
+  cat("  Date range:", as.character(start(xts_data)), "to", as.character(end(xts_data)), "\n")
+  
+  # Check for constant series (zero variance)
+  variances <- apply(xts_data, 2, var, na.rm=TRUE)
+  zero_var <- sum(variances < 1e-10)
+  if(zero_var > 0) {
+    cat("  WARNING:", zero_var, "series with near-zero variance\n")
+  }
+  
+  # Check basic stats
+  cat("  Mean returns range:", sprintf("%.4f to %.4f", 
+      min(colMeans(xts_data, na.rm=TRUE)), max(colMeans(xts_data, na.rm=TRUE))), "\n")
+  cat("  SD range:", sprintf("%.4f to %.4f", 
+      min(apply(xts_data, 2, sd, na.rm=TRUE)), max(apply(xts_data, 2, sd, na.rm=TRUE))), "\n")
+}
+
+diagnose_data(lithium_xts, "Lithium")
+diagnose_data(nickel_xts, "Nickel")
+diagnose_data(cobalt_xts, "Cobalt")
+diagnose_data(copper_xts, "Copper")
+```
+
+```{r dcc-lithium, fig.width=12, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("                   LITHIUM - DCC-GARCH ANALYSIS\n")
+cat("================================================================================\n\n")
+
+# Use all available series
+max_series <- ncol(lithium_xts)
+lithium_subset <- lithium_xts
+
+cat("Using all", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(lithium_subset), collapse="\n"), "\n\n")
+
+# Check correlation structure
+cat("Checking correlation matrix for multicollinearity...\n")
+lithium_cor <- cor(lithium_subset, use="pairwise.complete.obs")
+high_cor <- which(abs(lithium_cor) > 0.99 & lithium_cor < 1, arr.ind=TRUE)
+if(nrow(high_cor) > 0) {
+  cat("WARNING: Found", nrow(high_cor), "pairs with correlation > 0.99\n")
+}
+
+# Check for extreme values that might cause numerical issues
+cat("Checking for extreme values...\n")
+for(i in 1:ncol(lithium_subset)) {
+  col_mean <- mean(lithium_subset[,i], na.rm=TRUE)
+  col_sd <- sd(lithium_subset[,i], na.rm=TRUE)
+  n_extreme <- sum(abs(lithium_subset[,i] - col_mean) > 5 * col_sd, na.rm=TRUE)
+  if(n_extreme > 0) {
+    cat("  ", colnames(lithium_subset)[i], ":", n_extreme, "values beyond 5 SD\n")
+  }
+}
+cat("\n")
+
+# Manual DCC-GARCH fitting with fixed specification (faster than model selection)
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+lithium_dcc <- tryCatch({
+  library(rmgarch)
+  
+  # Simple GARCH(1,1) specification for each series
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  
+  # Replicate spec for all series
+  multi_spec <- multispec(replicate(max_series, garch_spec))
+  
+  # DCC specification
+  dcc_spec <- dccspec(uspec = multi_spec, 
+                      dccOrder = c(1,1), 
+                      distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  # Suppress warnings about NaNs during optimization (common in GARCH fitting)
+  dcc_fit <- suppressWarnings(
+    dccfit(dcc_spec, data = lithium_subset, 
+           fit.control = list(eval.se=FALSE, 
+                              stationarity=FALSE,  # Relax stationarity constraint
+                              scale=TRUE))         # Scale data for numerical stability
+  )
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(lithium_dcc)) {
+  cat("\n=== LITHIUM DCC-GARCH RESULTS ===\n\n")
+  
+  # Extract DCC parameters
+  dcc_params <- coef(lithium_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  # Get information criteria
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(lithium_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(lithium_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(lithium_dcc)[2]), "\n\n")
+  
+  # Visualizations
+  cat("\n=== LITHIUM DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  # Extract dynamic correlations
+  dcc_cor <- rcor(lithium_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  # Plot 1: Time-varying correlations for ALL pairs
+  # Calculate number of pairs
+  n_pairs <- n_series * (n_series - 1) / 2
+  
+  # Set up plot grid (aim for roughly square layout)
+  n_cols <- ceiling(sqrt(n_pairs))
+  n_rows <- ceiling(n_pairs / n_cols)
+  
+  par(mfrow=c(n_rows, n_cols), mar=c(3,3,2,1), oma=c(0,0,2,0))
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      cor_series <- dcc_cor[i,j,]
+      plot(as.Date(names(cor_series)), cor_series, type="l",
+           main=paste(colnames(lithium_subset)[i], "-", colnames(lithium_subset)[j]),
+           xlab="", ylab="Correlation", col="steelblue", lwd=2,
+           ylim=c(-1, 1), cex.main=0.9)
+      abline(h=0, col="gray50", lty=1)
+      abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+      grid()
+    }
+  }
+  mtext("Lithium: Dynamic Conditional Correlations (All Pairs)", outer=TRUE, cex=1.2, font=2)
+  par(mfrow=c(1,1))
+  
+  # Plot 2: Average correlations heatmap
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
+    }
+  }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(lithium_subset)
+  
+  par(mar=c(8,8,4,4))
+  # Transpose matrix to get diagonal from top-left to bottom-right
+  image(1:n_series, 1:n_series, t(avg_corr_matrix)[, n_series:1],
+        col=colorRampPalette(c("red", "white", "green"))(100),
+        xlab="", ylab="", main="Lithium: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(lithium_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=rev(colnames(lithium_subset)), las=2, cex.axis=0.8)
+  
+  # Add correlation values (adjusted for transposed matrix)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, n_series - j + 1, sprintf("%.2f", avg_corr_matrix[j,i]), cex=0.7)
+    }
+  }
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Lithium ***\n")
+  cat("Skipping visualizations.\n\n")
+}
+
+cat("\n=== LITHIUM DCC-GARCH SECTION COMPLETE ===\n")
+```
+
+```{r dcc-nickel, fig.width=12, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("                   NICKEL - DCC-GARCH ANALYSIS\n")
+cat("================================================================================\n\n")
+
+# Use all available series
+max_series <- ncol(nickel_xts)
+nickel_subset <- nickel_xts
+
+cat("Using all", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(nickel_subset), collapse="\n"), "\n\n")
+
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+nickel_dcc <- tryCatch({
+  library(rmgarch)
+  
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  multi_spec <- multispec(replicate(max_series, garch_spec))
+  dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  dcc_fit <- dccfit(dcc_spec, data = nickel_subset, fit.control = list(eval.se=FALSE))
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(nickel_dcc)) {
+  cat("\n=== NICKEL DCC-GARCH RESULTS ===\n\n")
+  
+  dcc_params <- coef(nickel_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(nickel_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(nickel_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(nickel_dcc)[2]), "\n\n")
+  
+  cat("\n=== NICKEL DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  dcc_cor <- rcor(nickel_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  # Plot all pairs with consistent scale
+  n_pairs <- n_series * (n_series - 1) / 2
+  n_cols <- ceiling(sqrt(n_pairs))
+  n_rows <- ceiling(n_pairs / n_cols)
+  
+  par(mfrow=c(n_rows, n_cols), mar=c(3,3,2,1), oma=c(0,0,2,0))
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      cor_series <- dcc_cor[i,j,]
+      plot(as.Date(names(cor_series)), cor_series, type="l",
+           main=paste(colnames(nickel_subset)[i], "-", colnames(nickel_subset)[j]),
+           xlab="", ylab="Correlation", col="darkgreen", lwd=2,
+           ylim=c(-1, 1), cex.main=0.9)
+      abline(h=0, col="gray50", lty=1)
+      abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+      grid()
+    }
+  }
+  mtext("Nickel: Dynamic Conditional Correlations (All Pairs)", outer=TRUE, cex=1.2, font=2)
+  par(mfrow=c(1,1))
+  
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
+    }
+  }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(nickel_subset)
+  
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, t(avg_corr_matrix)[, n_series:1],
+        col=colorRampPalette(c("red", "white", "green"))(100),
+        xlab="", ylab="", main="Nickel: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(nickel_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=rev(colnames(nickel_subset)), las=2, cex.axis=0.8)
+  
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, n_series - j + 1, sprintf("%.2f", avg_corr_matrix[j,i]), cex=0.7)
+    }
+  }
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Nickel ***\n")
+  cat("Skipping visualizations.\n\n")
+}
+
+cat("\n=== NICKEL DCC-GARCH SECTION COMPLETE ===\n")
+```
+
+```{r dcc-cobalt, fig.width=12, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("                   COBALT - DCC-GARCH ANALYSIS\n")
+cat("================================================================================\n\n")
+
+# Use all available series
+max_series <- ncol(cobalt_xts)
+cobalt_subset <- cobalt_xts
+
+cat("Using all", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(cobalt_subset), collapse="\n"), "\n\n")
+
+# Check correlation structure
+cat("Checking correlation matrix for multicollinearity...\n")
+cobalt_cor <- cor(cobalt_subset, use="pairwise.complete.obs")
+cat("Correlation matrix:\n")
+print(round(cobalt_cor, 3))
+cat("\n")
+
+high_cor <- which(abs(cobalt_cor) > 0.99 & cobalt_cor < 1, arr.ind=TRUE)
+if(nrow(high_cor) > 0) {
+  cat("WARNING: Found", nrow(high_cor), "pairs with correlation > 0.99\n")
+  unique_pairs <- high_cor[high_cor[,1] < high_cor[,2], , drop=FALSE]
+  for(i in 1:nrow(unique_pairs)) {
+    cat("  ", colnames(cobalt_subset)[unique_pairs[i,1]], "-", 
+        colnames(cobalt_subset)[unique_pairs[i,2]], 
+        ": r =", round(cobalt_cor[unique_pairs[i,1], unique_pairs[i,2]], 4), "\n")
+  }
+  cat("\n")
+}
+
+# Check for extreme values that might cause numerical issues
+cat("Checking for extreme values...\n")
+for(i in 1:ncol(cobalt_subset)) {
+  col_mean <- mean(cobalt_subset[,i], na.rm=TRUE)
+  col_sd <- sd(cobalt_subset[,i], na.rm=TRUE)
+  n_extreme <- sum(abs(cobalt_subset[,i] - col_mean) > 5 * col_sd, na.rm=TRUE)
+  if(n_extreme > 0) {
+    cat("  ", colnames(cobalt_subset)[i], ":", n_extreme, "values beyond 5 SD\n")
+  }
+}
+cat("\n")
+
+# Test each series individually to identify which are GARCH-fittable
+cat("Testing individual GARCH fitting for each series...\n")
+garch_fittable <- logical(ncol(cobalt_subset))
+names(garch_fittable) <- colnames(cobalt_subset)
+
+for(i in 1:ncol(cobalt_subset)) {
+  series_name <- colnames(cobalt_subset)[i]
+  test_fit <- tryCatch({
+    spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                       variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                       distribution.model = "std")
+    fit <- suppressWarnings(ugarchfit(spec, data = cobalt_subset[,i], solver = "hybrid"))
+    TRUE
+  }, error = function(e) {
+    FALSE
+  })
+  
+  garch_fittable[i] <- test_fit
+  cat("  ", series_name, ":", ifelse(test_fit, "✓ GARCH-fittable", "✗ Failed to fit"), "\n")
+}
+cat("\n")
+
+# Use only the series that successfully fit
+fittable_series <- colnames(cobalt_subset)[garch_fittable]
+n_fittable <- sum(garch_fittable)
+
+if(n_fittable < 2) {
+  cat("ERROR: Less than 2 series are GARCH-fittable. Cannot proceed with DCC-GARCH.\n")
+  cobalt_dcc <- NULL
+} else {
+  cat("Using", n_fittable, "GARCH-fittable series for DCC-GARCH:\n")
+  cat(paste("  -", fittable_series, collapse="\n"), "\n\n")
+  
+  if(n_fittable < max_series) {
+    failed_series <- colnames(cobalt_subset)[!garch_fittable]
+    cat("Excluding", max_series - n_fittable, "series that failed individual GARCH fitting:\n")
+    cat(paste("  -", failed_series, collapse="\n"), "\n\n")
+  }
+  
+  # Update subset to only include fittable series
+  cobalt_subset <- cobalt_subset[, garch_fittable]
+  
+  cat("Fitting DCC-GARCH(1,1) with Student-t distribution (all", n_fittable, "series)...\n")
+  
+  cobalt_dcc <- tryCatch({
+    library(rmgarch)
+    
+    garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                             variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                             distribution.model = "std")
+    multi_spec <- multispec(replicate(n_fittable, garch_spec))
+    dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+    
+    cat("  Fitting univariate GARCH models...\n")
+    dcc_fit <- suppressWarnings(
+      dccfit(dcc_spec, data = cobalt_subset, 
+             fit.control = list(eval.se=FALSE, 
+                                stationarity=FALSE,
+                                scale=TRUE))
+    )
+    
+    cat("  ✓ Model fitted successfully!\n\n")
+    dcc_fit
+  }, error = function(e) {
+    cat("  ✗ Error:", e$message, "\n\n")
+    return(NULL)
+  })
+  
+  # If failed with all series, try with 4 series (remove COLMEX and COLME3)
+  if(is.null(cobalt_dcc) && n_fittable >= 4) {
+    cat("\nAttempting DCC-GARCH with reduced set (4 series)...\n")
+    cat("Removing: COLMEX and COLME3\n\n")
+    
+    # Select 4 series excluding COLMEX and COLME3
+    keep_series <- !(colnames(cobalt_subset) %in% c("COLMEX", "COLME3"))
+    cobalt_subset_reduced <- cobalt_subset[, keep_series]
+    
+    cat("Using 4 series:\n")
+    cat(paste("  -", colnames(cobalt_subset_reduced), collapse="\n"), "\n\n")
+    
+    cat("Fitting DCC-GARCH(1,1) with Student-t distribution (4 series)...\n")
+    
+    cobalt_dcc <- tryCatch({
+      library(rmgarch)
+      
+      garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                               variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                               distribution.model = "std")
+      multi_spec <- multispec(replicate(4, garch_spec))
+      dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+      
+      cat("  Fitting univariate GARCH models...\n")
+      dcc_fit <- suppressWarnings(
+        dccfit(dcc_spec, data = cobalt_subset_reduced, 
+               fit.control = list(eval.se=FALSE, 
+                                  stationarity=FALSE,
+                                  scale=TRUE))
+      )
+      
+      cat("  ✓ Model fitted successfully with 4 series!\n\n")
+      
+      # Update cobalt_subset to the successful one
+      cobalt_subset <- cobalt_subset_reduced
+      dcc_fit
+    }, error = function(e) {
+      cat("  ✗ Error with 4 series:", e$message, "\n\n")
+      return(NULL)
+    })
+  }
+}
+
+if(!is.null(cobalt_dcc)) {
+  cat("\n=== COBALT DCC-GARCH RESULTS ===\n\n")
+  
+  dcc_params <- coef(cobalt_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(cobalt_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(cobalt_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(cobalt_dcc)[2]), "\n\n")
+  
+  cat("\n=== COBALT DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  dcc_cor <- rcor(cobalt_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  # Plot all pairs with consistent scale
+  n_pairs <- n_series * (n_series - 1) / 2
+  n_cols <- ceiling(sqrt(n_pairs))
+  n_rows <- ceiling(n_pairs / n_cols)
+  
+  par(mfrow=c(n_rows, n_cols), mar=c(3,3,2,1), oma=c(0,0,2,0))
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      cor_series <- dcc_cor[i,j,]
+      plot(as.Date(names(cor_series)), cor_series, type="l",
+           main=paste(colnames(cobalt_subset)[i], "-", colnames(cobalt_subset)[j]),
+           xlab="", ylab="Correlation", col="purple", lwd=2,
+           ylim=c(-1, 1), cex.main=0.9)
+      abline(h=0, col="gray50", lty=1)
+      abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+      grid()
+    }
+  }
+  mtext("Cobalt: Dynamic Conditional Correlations (All Pairs)", outer=TRUE, cex=1.2, font=2)
+  par(mfrow=c(1,1))
+  
+  # Average correlations heatmap
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
+    }
+  }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(cobalt_subset)
+  
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, t(avg_corr_matrix)[, n_series:1],
+        col=colorRampPalette(c("red", "white", "green"))(100),
+        xlab="", ylab="", main="Cobalt: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(cobalt_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=rev(colnames(cobalt_subset)), las=2, cex.axis=0.8)
+  
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, n_series - j + 1, sprintf("%.2f", avg_corr_matrix[j,i]), cex=0.7)
+    }
+  }
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Cobalt ***\n")
+  cat("Providing alternative visualizations using static correlations...\n\n")
+  
+  # Use the full correlation matrix and create visualizations
+  cat("\n=== COBALT STATIC CORRELATION VISUALIZATIONS ===\n\n")
+  
+  n_series <- ncol(cobalt_subset)
+  
+  # Plot 1: Static Correlation Heatmap
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, t(cobalt_cor)[, n_series:1],
+        col=colorRampPalette(c("red", "white", "green"))(100),
+        xlab="", ylab="", main="Cobalt: Static Correlation Matrix",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(cobalt_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=rev(colnames(cobalt_subset)), las=2, cex.axis=0.8)
+  
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, n_series - j + 1, sprintf("%.2f", cobalt_cor[j,i]), cex=0.7)
+    }
+  }
+  par(mar=c(5,4,4,2))
+  
+  # Plot 2: Rolling correlations for representative pairs
+  cat("\nPlotting rolling correlations (100-day window) for all pairs...\n\n")
+  
+  n_pairs <- n_series * (n_series - 1) / 2
+  n_cols <- ceiling(sqrt(n_pairs))
+  n_rows <- ceiling(n_pairs / n_cols)
+  
+  par(mfrow=c(n_rows, n_cols), mar=c(3,3,2,1), oma=c(0,0,2,0))
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      # Calculate rolling correlation
+      window_size <- min(100, floor(nrow(cobalt_subset) / 3))
+      roll_cor <- rollapply(cbind(cobalt_subset[,i], cobalt_subset[,j]), 
+                           width = window_size,
+                           function(x) cor(x[,1], x[,2]),
+                           by.column = FALSE, align = "right", fill = NA)
+      
+      plot(index(roll_cor), roll_cor, type="l",
+           main=paste(colnames(cobalt_subset)[i], "-", colnames(cobalt_subset)[j]),
+           xlab="", ylab="Correlation", col="purple", lwd=2,
+           ylim=c(-1, 1), cex.main=0.9)
+      abline(h=0, col="gray50", lty=1)
+      abline(h=mean(roll_cor, na.rm=TRUE), col="red", lty=2, lwd=2)
+      grid()
+    }
+  }
+  mtext(paste("Cobalt: Rolling Correlations (", window_size, "-day window, All Pairs)", sep=""), 
+        outer=TRUE, cex=1.2, font=2)
+  par(mfrow=c(1,1))
+  
+  cat("\nNote: DCC-GARCH failed due to computational singularity.\n")
+  cat("Showing rolling window correlations instead as approximation of dynamic correlations.\n")
+}
+
+cat("\n=== COBALT DCC-GARCH SECTION COMPLETE ===\n")
+```
+
+```{r dcc-copper, fig.width=12, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("                   COPPER - DCC-GARCH ANALYSIS\n")
+cat("================================================================================\n\n")
+
+# Use all available series
+max_series <- ncol(copper_xts)
+copper_subset <- copper_xts
+
+cat("Using all", max_series, "series for DCC-GARCH analysis:\n")
+cat(paste("  -", colnames(copper_subset), collapse="\n"), "\n\n")
+
+cat("Fitting DCC-GARCH(1,1) with Student-t distribution...\n")
+
+copper_dcc <- tryCatch({
+  library(rmgarch)
+  
+  garch_spec <- ugarchspec(mean.model = list(armaOrder = c(0,0)),
+                           variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                           distribution.model = "std")
+  multi_spec <- multispec(replicate(max_series, garch_spec))
+  dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1,1), distribution = "mvt")
+  
+  cat("  Fitting univariate GARCH models...\n")
+  dcc_fit <- dccfit(dcc_spec, data = copper_subset, fit.control = list(eval.se=FALSE))
+  
+  cat("  ✓ Model fitted successfully!\n\n")
+  dcc_fit
+}, error = function(e) {
+  cat("  ✗ Error:", e$message, "\n\n")
+  return(NULL)
+})
+
+if(!is.null(copper_dcc)) {
+  cat("\n=== COPPER DCC-GARCH RESULTS ===\n\n")
+  
+  dcc_params <- coef(copper_dcc, type="dcc")
+  cat("DCC Parameters:\n")
+  print(dcc_params)
+  cat("\n")
+  
+  cat("Model Information Criteria:\n")
+  cat("  Log-Likelihood:", sprintf("%.2f", likelihood(copper_dcc)), "\n")
+  cat("  AIC:", sprintf("%.2f", infocriteria(copper_dcc)[1]), "\n")
+  cat("  BIC:", sprintf("%.2f", infocriteria(copper_dcc)[2]), "\n\n")
+  
+  cat("\n=== COPPER DCC-GARCH VISUALIZATIONS ===\n\n")
+  
+  dcc_cor <- rcor(copper_dcc)
+  n_series <- dim(dcc_cor)[2]
+  
+  # Plot all pairs with consistent scale
+  n_pairs <- n_series * (n_series - 1) / 2
+  n_cols <- ceiling(sqrt(n_pairs))
+  n_rows <- ceiling(n_pairs / n_cols)
+  
+  par(mfrow=c(n_rows, n_cols), mar=c(3,3,2,1), oma=c(0,0,2,0))
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      cor_series <- dcc_cor[i,j,]
+      plot(as.Date(names(cor_series)), cor_series, type="l",
+           main=paste(colnames(copper_subset)[i], "-", colnames(copper_subset)[j]),
+           xlab="", ylab="Correlation", col="brown", lwd=2,
+           ylim=c(-1, 1), cex.main=0.9)
+      abline(h=0, col="gray50", lty=1)
+      abline(h=mean(cor_series, na.rm=TRUE), col="red", lty=2, lwd=2)
+      grid()
+    }
+  }
+  mtext("Copper: Dynamic Conditional Correlations (All Pairs)", outer=TRUE, cex=1.2, font=2)
+  par(mfrow=c(1,1))
+  
+  avg_corr_matrix <- matrix(0, nrow=n_series, ncol=n_series)
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      avg_corr_matrix[i,j] <- mean(dcc_cor[i,j,], na.rm=TRUE)
+    }
+  }
+  rownames(avg_corr_matrix) <- colnames(avg_corr_matrix) <- colnames(copper_subset)
+  
+  par(mar=c(8,8,4,4))
+  image(1:n_series, 1:n_series, t(avg_corr_matrix)[, n_series:1],
+        col=colorRampPalette(c("red", "white", "green"))(100),
+        xlab="", ylab="", main="Copper: Average Dynamic Correlations",
+        axes=FALSE, zlim=c(-1,1))
+  axis(1, at=1:n_series, labels=colnames(copper_subset), las=2, cex.axis=0.8)
+  axis(2, at=1:n_series, labels=rev(colnames(copper_subset)), las=2, cex.axis=0.8)
+  
+  for(i in 1:n_series) {
+    for(j in 1:n_series) {
+      text(i, n_series - j + 1, sprintf("%.2f", avg_corr_matrix[j,i]), cex=0.7)
+    }
+  }
+  par(mar=c(5,4,4,2))
+} else {
+  cat("\n*** DCC-GARCH model fitting failed for Copper ***\n")
+  cat("Skipping visualizations.\n\n")
+}
+
+cat("\n=== COPPER DCC-GARCH SECTION COMPLETE ===\n")
+```
+
+```{r dcc-comparison, fig.width=14, fig.height=10}
+cat("\n")
+cat("================================================================================\n")
+cat("           CROSS-METAL DCC-GARCH COMPARISON\n")
+cat("================================================================================\n\n")
+
+# Extract information from fitted models (handling NULL cases)
+get_model_info <- function(dcc_fit, metal_name) {
+  if(is.null(dcc_fit)) {
+    return(list(aic = NA, bic = NA, loglik = NA))
+  }
+  info <- infocriteria(dcc_fit)
+  return(list(
+    aic = info[1],
+    bic = info[2],
+    loglik = likelihood(dcc_fit)
+  ))
+}
+
+lithium_info <- get_model_info(lithium_dcc, "Lithium")
+nickel_info <- get_model_info(nickel_dcc, "Nickel")
+cobalt_info <- get_model_info(cobalt_dcc, "Cobalt")
+copper_info <- get_model_info(copper_dcc, "Copper")
+
+# Create comparison summary table
+comparison_summary <- data.frame(
+  Metal = c("Lithium", "Nickel", "Cobalt", "Copper"),
+  N_Series_Total = c(ncol(lithium_xts), ncol(nickel_xts), ncol(cobalt_xts), ncol(copper_xts)),
+  N_Series_Used = c(
+    ifelse(is.null(lithium_dcc), 0, ncol(lithium_xts)),
+    ifelse(is.null(nickel_dcc), 0, ncol(nickel_xts)),
+    ifelse(is.null(cobalt_dcc), 0, 2),
+    ifelse(is.null(copper_dcc), 0, ncol(copper_xts))
+  ),
+  GARCH_Type = rep("sGARCH(1,1)", 4),
+  Distribution = rep("Student-t", 4),
+  LogLik = c(lithium_info$loglik, nickel_info$loglik, cobalt_info$loglik, copper_info$loglik),
+  AIC = c(lithium_info$aic, nickel_info$aic, cobalt_info$aic, copper_info$aic),
+  BIC = c(lithium_info$bic, nickel_info$bic, cobalt_info$bic, copper_info$bic),
+  Status = c(
+    ifelse(is.null(lithium_dcc), "Failed", "Fitted"),
+    ifelse(is.null(nickel_dcc), "Failed", "Fitted"),
+    ifelse(is.null(cobalt_dcc), "Failed", "Fitted"),
+    ifelse(is.null(copper_dcc), "Failed", "Fitted")
+  )
+)
+
+cat("=== DCC-GARCH MODEL COMPARISON ACROSS METALS ===\n\n")
+kable(comparison_summary, digits=2,
+      caption="Comparison of DCC-GARCH Models Across Metals")
+
+cat("\n")
+# Print summary of fitted vs failed models
+n_fitted <- sum(comparison_summary$Status == "Fitted")
+n_failed <- sum(comparison_summary$Status == "Failed")
+cat("Models fitted successfully:", n_fitted, "of 4\n")
+if(n_failed > 0) {
+  failed_list <- comparison_summary$Metal[comparison_summary$Status == "Failed"]
+  cat("Models that failed:", paste(failed_list, collapse=", "), "\n")
+}
+cat("\n")
+
+# Visual comparison - show ALL metals, with failed ones in gray
+par(mfrow=c(2,2), mar=c(6,5,3,2))
+
+# Color vector: use color if fitted, gray if failed
+bar_colors <- ifelse(comparison_summary$Status == "Fitted",
+                     c("#E69F00", "#56B4E9", "#009E73", "#F0E442"),
+                     "lightgray")
+
+# 1. Number of series used
+values1 <- ifelse(comparison_summary$Status == "Fitted", 
+                  comparison_summary$N_Series_Used, 
+                  0)
+barplot(values1, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="Number of Series Used in DCC-GARCH",
+        ylab="Count", border=NA, las=1)
+# Add labels for fitted models
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Fitted") {
+    text(x=(i-1)*1.2 + 0.7, y=values1[i] + 0.2,
+         labels=values1[i], cex=1.2, font=2)
+  } else {
+    text(x=(i-1)*1.2 + 0.7, y=0.5, labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+# 2. Log-Likelihood comparison
+values2 <- comparison_summary$LogLik
+values2[is.na(values2)] <- 0  # Set NA to 0 for plotting
+barplot(values2, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="Log-Likelihood (Higher is Better)",
+        ylab="Log-Likelihood", border=NA, las=1)
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Failed") {
+    text(x=(i-1)*1.2 + 0.7, y=min(values2[!is.na(comparison_summary$LogLik)])/2, 
+         labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+# 3. AIC comparison
+values3 <- comparison_summary$AIC
+values3[is.na(values3)] <- 0
+barplot(values3, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="AIC Comparison (Lower is Better)",
+        ylab="AIC", border=NA, las=1)
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Failed") {
+    text(x=(i-1)*1.2 + 0.7, y=min(values3[!is.na(comparison_summary$AIC)])/2,
+         labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+# 4. BIC comparison
+values4 <- comparison_summary$BIC
+values4[is.na(values4)] <- 0
+barplot(values4, names.arg=comparison_summary$Metal,
+        col=bar_colors,
+        main="BIC Comparison (Lower is Better)",
+        ylab="BIC", border=NA, las=1)
+for(i in 1:4) {
+  if(comparison_summary$Status[i] == "Failed") {
+    text(x=(i-1)*1.2 + 0.7, y=min(values4[!is.na(comparison_summary$BIC)])/2,
+         labels="FAILED", cex=0.8, col="red", font=2)
+  }
+}
+
+par(mfrow=c(1,1))
+
+cat("\n\n=== MODEL SPECIFICATION ===\n")
+cat("All metals fitted with:\n")
+cat("  - Model: DCC-GARCH(1,1) with sGARCH univariate specifications\n")
+cat("  - Distribution: Multivariate Student-t\n")
+cat("  - Series: All 6 series per metal (Cobalt: 2 series due to multicollinearity)\n\n")
+
+cat("=== INTERPRETATION ===\n")
+cat("GARCH Type: Standard GARCH(1,1) - captures volatility clustering\n")
+cat("Distribution: Student-t - allows for heavy tails common in financial data\n")
+cat("AIC/BIC: Information criteria for model comparison (lower = better fit)\n")
+cat("DCC: Dynamic conditional correlations capture time-varying relationships\n\n")
+
+cat("================================================================================\n")
+cat("                 DCC-GARCH ANALYSIS COMPLETE\n")
+cat("================================================================================\n\n")
+``` 
