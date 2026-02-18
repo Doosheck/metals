@@ -56,7 +56,8 @@ metal_files <- list(
   "Nickel"  = "data/ALL_nickel_prices_cubic_spline.csv"
 )
 
-# ---- 1 st approach: Define Selection Function based on the length of series---
+### ---- Define Selection Function based on the length of series ----
+
 get_longest_series_from_file <- function(file_path, metal_name) {
   
   # Read Data
@@ -111,7 +112,7 @@ cat("Strict Overlap:    ", dim(df_overlap), "\n")
 
 head(df_overlap)
 
-### ---- 2. approach: Select Series by Source Pattern ----
+### ---- Alternative approach: Select Series by Source Pattern ----
 get_series_by_source <- function(file_path, metal_name, source_pattern) {
   
   # Read Data
@@ -166,7 +167,7 @@ build_robustness_dataset <- function(source_name) {
   
   return(df_merged)
 }
-# --- 4. Execution Examples ---
+### ---- Execution Examples ----
 
 # Scenario A: Get all "DALY" series
 df_daly <- build_robustness_dataset("DALY")
@@ -185,7 +186,8 @@ cat("WUXI Dataset Dimensions:", dim(df_wuxi), "\n")
 print(names(df_daly))
 str(df_daly)
 
-###---- Bubble detection:----
+##---- Bubble detection:----
+###---- Procedure for 4 series----
 data_matrix <- df_daly %>%
   select(-Date) %>%
   as.data.frame()
@@ -234,6 +236,116 @@ head(df_final_dataset)
 saveRDS(df_final_dataset, here("data", "bubble_dummies_df_daly.rds"))
 # Load it later (it will be exactly the same tibble)
 readRDS("data/bubble_dummies_df_daly.rds")
+
+
+### ----Plot series with bubbles----
+
+# Define a list mapping the "Pretty Name" to your specific column names.
+# Structure: "Metal Name" = c(Price_Column, Dummy_Column)
+metal_map <- list(
+  "Cobalt"  = c(price = "CODALY", dummy = "CODALY_BD"),
+  "Copper"  = c(price = "CUDALY", dummy = "CUDALY_BD"),
+  "Lithium" = c(price = "LIDALY", dummy = "LIDALY_BD"),
+  "Nickel"  = c(price = "NIDALY", dummy = "NIDALY_BD")
+)
+
+# Create a folder to save plots (if it doesn't exist)
+if(!dir.exists("R/plots_timeline")) dir.create("R/plots_timeline")
+
+get_bubble_rects <- function(dates, dummy_col) {
+  
+  # Identify changes (0->1 or 1->0) to find blocks
+  # We use rle (Run Length Encoding) to find consecutive runs of 1s
+  runs <- rle(dummy_col)
+  
+  # Calculate end positions of each run
+  end_pos <- cumsum(runs$lengths)
+  # Calculate start positions
+  start_pos <- c(1, head(end_pos, -1) + 1)
+  
+  # Filter only the runs where value is 1 (Bubble)
+  bubble_indices <- which(runs$values == 1)
+  
+  if(length(bubble_indices) == 0) return(NULL)
+  
+  # Create a dataframe of start and end dates for rectangles
+  rects <- data.frame(
+    xmin = dates[start_pos[bubble_indices]],
+    xmax = dates[end_pos[bubble_indices]]
+  )
+  
+  # Tiny fix: If a bubble is 1 day long, xmin equals xmax. 
+  # To make it visible, we can add 1 day to xmax.
+  rects$xmax <- rects$xmax + days(1)
+  
+  return(rects)
+}
+
+plot_list <- list()
+
+for (metal_name in names(metal_map)) {
+  
+  # A. Setup Variables
+  cols <- metal_map[[metal_name]]
+  col_price <- cols["price"]
+  col_dummy <- cols["dummy"]
+  
+  # B. Get Rectangles for Shading
+  # We extract the date and dummy column to find the intervals
+  rect_data <- get_bubble_rects(df_master$Date, df_master[[col_dummy]])
+  
+  # C. Create Plot
+  p <- ggplot() +
+    
+    # Layer 1: Pink Shaded Regions (Must be first to be in background)
+    # We use -Inf and Inf for ymin/ymax so the band covers the whole height
+    {if(!is.null(rect_data)) 
+      geom_rect(data = rect_data, 
+                aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+                fill = "red3", alpha = 0.2) # Alpha 0.2 makes it light pink
+    } +
+    
+    # Layer 2: The Price Line (Black)
+    geom_line(data = df_master, aes(x = Date, y = .data[[col_price]]), 
+              color = "black", linewidth = 0.6) +
+    
+    # Layer 3: Styling
+    labs(
+      title = metal_name, # Simple title like in your image
+      y = NULL,           # Removing Y label to match your image style
+      x = NULL            # Removing X label to match your image style
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold", size = 16, hjust = 0.5), # Centered Bold Title
+      panel.grid.minor = element_blank(), # Cleaner grid
+      panel.grid.major.x = element_line(color = "grey90"), # Vertical grid lines
+      axis.text = element_text(size = 12, color = "grey30")
+    )
+  
+  plot_list[[metal_name]] <- p
+  # D. Print and Save
+  print(p)
+  
+  ggsave(
+    filename = paste0("R/plots_timeline/Timeline_Shaded_", metal_name, ".png"), 
+    plot = p, 
+    width = 10, 
+    height = 6, 
+    dpi = 300,
+    bg = "white"
+  )
+  
+  cat(paste("Saved shaded plot for:", metal_name, "\n"))
+}
+
+library(patchwork) # Optional: Great for combining plots side-by-side
+final_plot <- (plot_list[["Cobalt"]] + plot_list[["Lithium"]]) / 
+  (plot_list[["Nickel"]] + plot_list[["Copper"]])
+print(final_plot)
+ggsave("R/plots_timeline/All_Metals_Combined.png", final_plot, width = 12, height = 8)
+
+
 
 ## ----Macrovariables----
 # # Tickers map:
@@ -349,8 +461,9 @@ df_final <- df_merged_raw %>%
                 ~ if_else(. < 0.01, 0.01, .)))
 summary(df_final)
 
-#----ML----
-##---- join datasets ----
+
+##---- Join datasets ----
+
 df_master <- df_final %>%
   left_join(
     df_final_dataset %>% select(Date, ends_with("_dummy")), 
@@ -362,12 +475,83 @@ print(colnames(df_master))
 df_master <- df_master %>%
   rename_with(~ gsub("_dummy", "_BD", .x), ends_with("_dummy"))
 
-# Sprawdü nowe nazwy
+# Verify new names
 print(names(df_master))
 summary(df_master)
 saveRDS(df_master, "R/df_master.rds")
 
-##---- Feature Engineering (The "Composite Market Dynamics" Logic)----
+df_master <- df_master %>%
+  mutate(across(
+    .cols = where(is.numeric) & !ends_with("dummy") & !ends_with("DB"), 
+    .fns = ~ ifelse(. <= 0, 0.001, .)
+  ))
+
+# Verification: Check if any zeros/negatives remain in the price columns
+summary(select(df_master, where(is.numeric), -ends_with("dummy")))
+cat("Data cleaning complete. All non-positive values replaced with 0.001.\n")
+
+###---- Plots of series ----
+
+vars_to_plot <- df_master %>%
+  select(where(is.numeric)) %>%
+  select(-any_of(c("Date", "date"))) %>%
+  select(-ends_with("dummy")) %>%  # Standard exclusion
+  select(-ends_with("BD")) %>%     # Just in case you renamed them
+  names()
+
+cat(paste("Plotting", length(vars_to_plot), "series in a grid...\n"))
+
+# 2. Reshape to Long Format
+df_long <- df_master %>%
+  select(Date, all_of(vars_to_plot)) %>%
+  pivot_longer(
+    cols = -Date, 
+    names_to = "Series", 
+    values_to = "Value"
+  ) %>%
+  mutate(Series = factor(Series, levels = vars_to_plot))
+
+# 3. Generate Plot
+p_grid <- ggplot(df_long, aes(x = Date, y = Value)) +
+  # Thin dark line (standard academic style)
+  geom_line(color = "black", linewidth = 0.3) +
+  
+  # Log Scale handling (Safety for 0 or negative values like Oil)
+  scale_y_continuous(trans = scales::pseudo_log_trans(base = 10)) +
+  
+  # 4x4 Grid
+  facet_wrap(~ Series, ncol = 4, scales = "free_y") +
+  
+  # Styling
+  labs(x = NULL, y = NULL) + # Clean look
+  theme_minimal() + 
+  theme(
+    # REMOVE GREY BOXES (The "Strip")
+    strip.background = element_blank(),
+    
+    # Make titles bold and left-aligned (or centered)
+    strip.text = element_text(face = "bold", size = 10, hjust = 0.5, color = "black"),
+    
+    # Axis text small but readable
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7, color = "grey40"),
+    axis.text.y = element_text(size = 7, color = "grey40"),
+    
+    # Remove minor grid lines for clarity
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "grey92", linewidth = 0.2),
+    
+    # Add a border around the panels (optional, but often looks tidy)
+    panel.border = element_rect(color = "grey80", fill = NA, linewidth = 0.5)
+  )
+# 4. Save (Square dimensions work best for 4x4)
+ggsave("R/All_Series_Grid_4x4.png", p_grid, width = 12, height = 10, dpi = 300, bg="white")
+
+print(p_grid)
+
+
+#----ML----
+
+##----STEP 1 Feature Engineering (The "Composite Market Dynamics" Logic)----
 #prepare_ml_data_old <- function(target_metal, target_col_name, df_master) {
   
   # 1. Identify the Target Column (Bubble Flag)
@@ -426,7 +610,7 @@ saveRDS(df_master, "R/df_master.rds")
 
 prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   
-  target_dummy <- paste0(target_col_name, "_dummy")
+  target_dummy <- paste0(target_col_name, "_BD")
   
   if(!target_dummy %in% names(df_master)) {
     stop(paste("Error: Column", target_dummy, "not found in df_master"))
@@ -435,12 +619,12 @@ prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   # A. Identyfikacja zmiennych
   predictors_numeric <- df_master %>%
     select(where(is.numeric)) %>%
-    select(-ends_with("dummy")) %>%
+    select(-ends_with("BD")) %>%
     select(-any_of(c("Date", "date", "DATE"))) %>% 
     names()
   
   peer_dummies <- df_master %>%
-    select(ends_with("dummy")) %>%
+    select(ends_with("BD")) %>%
     select(-all_of(target_dummy)) %>%
     names()
   
@@ -464,7 +648,6 @@ prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   calc_safe_vol <- function(x) {
     x_num <- as.numeric(x)
     
-    # --- TU JEST ZMIANA ---
     bad_idx <- which(x_num <= 0)
     if(length(bad_idx) > 0) {
       x_num[bad_idx] <- 0.001

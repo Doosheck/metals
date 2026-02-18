@@ -13,7 +13,7 @@ library(xtable)
 # ==============================================================================
 prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   
-  target_dummy <- paste0(target_col_name, "_dummy")
+  target_dummy <- paste0(target_col_name, "_BD")
   
   if(!target_dummy %in% names(df_master)) {
     stop(paste("Error: Column", target_dummy, "not found in df_master"))
@@ -22,12 +22,12 @@ prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   # A. Identify Predictors
   predictors_numeric <- df_master %>%
     select(where(is.numeric)) %>%
-    select(-ends_with("dummy")) %>%
+    select(-ends_with("BD")) %>%
     select(-any_of(c("Date", "date", "DATE"))) %>% 
     names()
   
   peer_dummies <- df_master %>%
-    select(ends_with("dummy")) %>%
+    select(ends_with("BD")) %>%
     select(-all_of(target_dummy)) %>%
     names()
   
@@ -70,6 +70,8 @@ prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   df_final <- drop_na(df_model)
   return(df_final)
 }
+
+
 
 # ==============================================================================
 # 2. LIGHTGBM PIPELINE FUNCTION
