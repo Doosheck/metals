@@ -173,32 +173,6 @@ if(!dir.exists("plots_lgbm")) dir.create("plots_lgbm")
 
 lgbm_results <- list()
 
-It looks like you just need the initialization of the perf_table_lgbm dataframe added right before the second loop, along with the LaTeX table generation at the end so you get your final output.
-
-Here is the complete, seamlessly joined code block. You can copy and paste this entire section directly into your script.
-
-R
-library(pROC)
-library(xtable)
-library(dplyr)
-
-# ==============================================================================
-# 3. EXECUTION LOOP (Training LightGBM models)
-# ==============================================================================
-
-metal_configs <- list(
-  "Cobalt"  = "CODALY", 
-  "Lithium" = "LIDALY", 
-  "Nickel"  = "NIDALY", 
-  "Copper"  = "CUDALY"
-)
-
-# New folders for LGBM results to keep things organized
-if(!dir.exists("results_lgbm")) dir.create("results_lgbm")
-if(!dir.exists("plots_lgbm")) dir.create("plots_lgbm")
-
-lgbm_results <- list()
-
 # Standard loop (LightGBM is fast enough without parallel usually)
 for (m_name in names(metal_configs)) {
   
