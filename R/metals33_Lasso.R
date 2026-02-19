@@ -129,6 +129,14 @@ for (m_name in names(metal_configs)) {
     # We use lambda.min to be competitive.
     probs <- predict(cv_lasso, newx = X, s = "lambda.min", type = "response")
     
+    probs_vec <- as.numeric(probs)
+    
+    auc_val <- NA
+    try({
+      roc_obj <- pROC::roc(y, probs_vec, quiet = TRUE)
+      auc_val <- as.numeric(pROC::auc(roc_obj))
+    }, silent = TRUE)
+    
     # 5. Calculate Metrics
     pred_class <- ifelse(probs > 0.5, 1, 0)
     

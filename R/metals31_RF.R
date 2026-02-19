@@ -303,7 +303,7 @@ for (metal_name in names(metal_map)) {
     {if(!is.null(rect_data)) 
       geom_rect(data = rect_data, 
                 aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
-                fill = "red3", alpha = 0.2) # Alpha 0.2 makes it light pink
+                fill = "purple3", alpha = 0.2) # Alpha 0.2 makes it light pink
     } +
     
     # Layer 2: The Price Line (Black)
