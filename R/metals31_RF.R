@@ -32,6 +32,7 @@ required_libs <- c(
 library(future)
 library(doFuture)
 library(xtable)
+library(pROC)
 
 # --- Execute ---
 install_and_load(required_libs)
@@ -479,6 +480,7 @@ df_master <- df_master %>%
 print(names(df_master))
 summary(df_master)
 saveRDS(df_master, "R/df_master.rds")
+df_master <- readRDS("R/df_master.rds")
 
 df_master_plot <- df_master %>%
   mutate(across(
