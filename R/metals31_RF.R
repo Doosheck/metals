@@ -235,9 +235,11 @@ df_final_dataset <- bind_cols(df_daly, as_tibble(dummy_matrix))
 head(df_final_dataset)
 
 saveRDS(df_final_dataset, here("data", "bubble_dummies_df_daly.rds"))
+
 # Load it later (it will be exactly the same tibble)
 readRDS("data/bubble_dummies_df_daly.rds")
-
+df_final_dataset <- readRDS("data/bubble_dummies_df_daly.rds")
+names(df_final_dataset) <- gsub("_BD", "_dummy", names(df_final_dataset))
 
 ### ----Plot series with bubbles----
 
@@ -250,10 +252,20 @@ metal_map <- list(
   "Nickel"  = c(price = "NIDALY", dummy = "NIDALY_BD")
 )
 
+# metal_map <- list(
+#   "Cobalt"  = c(price = "CODALY", dummy = "CODALY_dummy"),
+#   "Copper"  = c(price = "CUDALY", dummy = "CUDALY_dummy"),
+#   "Lithium" = c(price = "LIDALY", dummy = "LIDALY_dummy"),
+#   "Nickel"  = c(price = "NIDALY", dummy = "NIDALY_dummy")
+# )
+
 # Create a folder to save plots (if it doesn't exist)
 if(!dir.exists("R/plots_timeline")) dir.create("R/plots_timeline")
 
 get_bubble_rects <- function(dates, dummy_col) {
+  
+  if(is.null(dummy_col)) return(NULL)
+  dummy_col_clean <- as.numeric(as.character(unlist(dummy_col)))
   
   # Identify changes (0->1 or 1->0) to find blocks
   # We use rle (Run Length Encoding) to find consecutive runs of 1s
