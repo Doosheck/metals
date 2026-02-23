@@ -11,7 +11,8 @@ library(pROC)
 # ==============================================================================
 # 1. DATA PREPARATION (Identical to Random Forest for fair comparison)
 # ==============================================================================
-prepare_ml_data <- function(target_metal, target_col_name, df_master) {
+#old function - use the one from metals31_RF.R
+#prepare_ml_data <- function(target_metal, target_col_name, df_master) {
   
   target_dummy <- paste0(target_col_name, "_BD")
   
