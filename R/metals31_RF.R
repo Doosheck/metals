@@ -446,3 +446,222 @@ print(latex_obj,
       #booktabs = TRUE, 
       #comment = FALSE,
       #file = "Table_Results.tex") # <--- Checks your folder for this file!
+
+#---- 2nd approach - a division into training and testing -----
+Przeanalizowa³em kod pod k¹tem potencjalnych b³êdów, stabilnoœci ("edge cases") oraz zgodnoœci z Twoimi wytycznymi dotycz¹cymi pracy na OneDrive i czystoœci kodu.
+
+Znalaz³em kilka drobnych, ale wa¿nych miejsc, które wymaga³y ostatecznego szlifu, aby upewniæ siê, ¿e pêtla nie "wywali siê" w trakcie obliczeñ (zw³aszcza na zbiorze testowym).
+
+Lista finalnych poprawek:
+  Bezpieczne wyci¹ganie prawdopodobieñstw: Zamiast wybieraæ drug¹ kolumnê predykcji w ciemno (predictions[, 2]), u¿y³em jawnego odwo³ania do nazwy klasy (predictions[, "1"]). Chroni to przed sytuacj¹, w której ranger zamieni kolejnoœæ kolumn.
+
+Zabezpieczenie AUC-ROC (Safe Guard): Jeœli w zbiorze testowym (stanowi¹cym 20% danych) nie bêdzie ani jednej bañki, funkcja pROC::roc() zwróci³aby b³¹d i zatrzyma³a ca³¹ pêtlê. Doda³em warunek sprawdzaj¹cy, czy w true_y s¹ obecne obie klasy.
+
+Tidyverse w Ewaluacji: Zamieni³em powolne rbind() w pêtli na czyste podejœcie z wykorzystaniem list i bind_rows(), co jest standardem w tidyverse.
+
+Oto ostateczna, w pe³ni kuloodporna wersja kodu:
+  
+  R
+##---- LIBRARIES ----
+library(tidyverse)
+library(ranger)
+library(kernelshap)
+library(shapviz)
+library(future.apply)
+library(doFuture)
+library(pROC)
+library(xtable)
+
+##---- STEP 1: Feature Engineering ----
+prepare_ml_data <- function(target_col_prefix, df_master) {
+  
+  target_dummy <- paste0(target_col_prefix, "_BD")
+  
+  if (!target_dummy %in% names(df_master)) {
+    stop(paste("Error: Column", target_dummy, "not found in df_master"))
+  }
+  
+  # A. Identify variables
+  predictors_numeric <- df_master %>%
+    select(where(is.numeric)) %>%
+    select(-ends_with("BD"), -any_of(c("Date", "date", "DATE"))) %>%
+    names()
+  
+  peer_dummies <- df_master %>%
+    select(ends_with("BD")) %>%
+    select(-all_of(target_dummy)) %>%
+    names()
+  
+  # B. Helper functions for safe returns and volatility
+  calc_safe_ret <- function(x) {
+    x_num <- as.numeric(x)
+    x_num[x_num <= 0] <- 0.001 # Prevent log(0)
+    c(NA, diff(log(x_num)))
+  }
+  
+  calc_safe_vol <- function(x) {
+    x_num <- as.numeric(x)
+    x_num[x_num <= 0] <- 0.001
+    TTR::runSD(c(NA, diff(log(x_num))), n = 10)
+  }
+  
+  # C. Processing and Lagging
+  df_model <- df_master %>%
+    arrange(Date) %>%
+    mutate(
+      across(all_of(predictors_numeric), 
+             list(Ret = calc_safe_ret, Vol = calc_safe_vol), 
+             .names = "{.col}_{.fn}")
+    ) %>%
+    mutate(
+      Target_Bubble = factor(.data[[target_dummy]], levels = c("0", "1")),
+      across(ends_with("_Ret"), ~ lag(.), .names = "{.col}_Lag1"),
+      across(ends_with("_Vol"), ~ lag(.), .names = "{.col}_Lag1"),
+      across(all_of(predictors_numeric), ~ lag(.), .names = "{.col}_Level_Lag1"),
+      across(all_of(peer_dummies), ~ replace_na(lag(.), 0), .names = "{.col}_Lag1")
+    ) %>%
+    select(Date, Target_Bubble, ends_with("Lag1")) %>%
+    drop_na()
+  
+  return(df_model)
+}
+
+##---- STEP 2: The ML Pipeline (with Train/Test Split) ----
+run_ml_pipeline_robust <- function(metal_label, col_prefix, df_data, train_prop = 0.8) {
+  
+  message(paste("\n=== Processing:", metal_label, "==="))
+  
+  df_ml <- tryCatch({
+    prepare_ml_data(col_prefix, df_data)
+  }, error = function(e) {
+    message("Error preparing data: ", e$message)
+    return(NULL)
+  })
+  
+  if (is.null(df_ml)) return(NULL)
+  
+  # Check bubble prevalence
+  n_bubbles <- sum(df_ml$Target_Bubble == "1")
+  if (n_bubbles < 10) {
+    message("Skipping - Not enough bubbles (<10).")
+    return(NULL)
+  }
+  
+  # --- Chronological Split ---
+  n_obs <- nrow(df_ml)
+  split_idx <- floor(n_obs * train_prop)
+  
+  df_train <- df_ml[1:split_idx, ]
+  df_test  <- df_ml[(split_idx + 1):n_obs, ]
+  
+  # Train Model (on Train Set)
+  fit_rf <- ranger(
+    Target_Bubble ~ ., 
+    data        = select(df_train, -Date), 
+    importance  = "permutation",
+    probability = TRUE, 
+    num.trees   = 500
+  )
+  
+  # SHAP Calculation (on Test Set)
+  X_test <- select(df_test, -Date, -Target_Bubble)
+  bg_X   <- X_test[sample(nrow(X_test), min(25, nrow(X_test))), ]
+  
+  shap_values <- kernelshap(fit_rf, X_test, bg_X = bg_X)
+  viz <- shapviz(shap_values, focus = "1") 
+  
+  # Label Cleaning Function
+  clean_labels_short <- function(x) {
+    x %>% 
+      str_remove_all("_Lag1|_Level") %>% 
+      str_replace("_Ret", " Ret") %>% 
+      str_replace("_Vol", " Vol") %>%
+      str_replace("_BD", " Bubble")
+  }
+  
+  # Generate Plot
+  plot_obj <- sv_importance(viz, kind = "beeswarm") +
+    scale_y_discrete(labels = clean_labels_short) +
+    theme_minimal() +
+    labs(title = paste(metal_label, "Feature Importance (Out-of-Sample)"))
+  
+  return(list(
+    model = fit_rf, 
+    plot = plot_obj, 
+    shap_obj = viz, 
+    test_data = df_test
+  ))
+}
+
+##---- STEP 3: Execution Loop ----
+registerDoFuture()
+plan(multisession, workers = 4)
+
+metal_configs <- list(
+  "Cobalt"  = "CODALY", 
+  "Lithium" = "LIDALY", 
+  "Nickel"  = "NIDALY", 
+  "Copper"  = "CUDALY"
+)
+
+# Flat folder structure (OneDrive safe)
+if(!dir.exists("results_rds")) dir.create("results_rds")
+ml_results <- list()
+
+for (m_name in names(metal_configs)) {
+  res <- run_ml_pipeline_robust(m_name, metal_configs[[m_name]], df_master)
+  if (!is.null(res)) {
+    ml_results[[m_name]] <- res
+    saveRDS(res, paste0("results_rds/result_", m_name, ".rds"))
+  }
+}
+plan(sequential)
+
+##---- STEP 4: Performance Evaluation (Out-of-Sample) ----
+eval_results <- list()
+
+for (m_name in names(ml_results)) {
+  res_obj <- ml_results[[m_name]]
+  test_df <- res_obj$test_data
+  
+  # Safely predict and extract probabilities for class "1"
+  preds_prob <- predict(res_obj$model, data = select(test_df, -Date, -Target_Bubble))$predictions[, "1"]
+  preds_class <- ifelse(preds_prob > 0.5, 1, 0)
+  true_y <- as.numeric(as.character(test_df$Target_Bubble))
+  
+  # Safely calculate AUC (requires both 0 and 1 in true labels)
+  if (length(unique(true_y)) > 1) {
+    roc_obj <- roc(true_y, preds_prob, quiet = TRUE)
+    auc_val <- as.numeric(auc(roc_obj))
+  } else {
+    auc_val <- NA # Not enough classes to calculate AUC
+    message(paste("Warning:", m_name, "test set does not contain both classes for AUC."))
+  }
+  
+  # Metrics
+  TP <- sum(preds_class == 1 & true_y == 1)
+  TN <- sum(preds_class == 0 & true_y == 0)
+  FP <- sum(preds_class == 1 & true_y == 0)
+  FN <- sum(preds_class == 0 & true_y == 1)
+  
+  # Handle division by zero
+  sens <- ifelse((TP + FN) == 0, 0, TP / (TP + FN))
+  spec <- ifelse((TN + FP) == 0, 0, TN / (TN + FP))
+  
+  eval_results[[m_name]] <- data.frame(
+    Metal = m_name,
+    Bal_Acc = (sens + spec) / 2,
+    Sens = sens,
+    Spec = spec,
+    AUC = auc_val,
+    Bubbles = paste0(TP, "/", (TP + FN))
+  )
+}
+
+# Combine all results into one table using tidyverse
+performance_table <- bind_rows(eval_results)
+
+# Print LaTeX code to console
+print(xtable(performance_table, caption = "Out-of-Sample Performance", digits = 3), 
+      include.rownames = FALSE)
+             
