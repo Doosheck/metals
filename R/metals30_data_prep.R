@@ -186,24 +186,28 @@ cat("WUXI Dataset Dimensions:", dim(df_wuxi), "\n")
 # Check the column names to see what you got
 print(names(df_daly))
 str(df_daly)
+saveRDS(df_daly, "R/df_daly_raw.rds")
+write.csv2(df_daly, "R/df_daly_raw.csv")
 
 ##---- Bubble detection:----
 ###---- Procedure for 4 series----
-data_matrix <- df_daly %>%
-  select(-Date) %>%
+data_matrix <- df_daly %>% 
+  select(-Date) %>% 
+  mutate(across(everything(), log)) %>% # Apply Natural Log to all series
   as.data.frame()
+
 rownames(data_matrix) <- as.character(df_daly$Date)
 
-est_results <- radf(data_matrix)
+est_results <- radf(data_matrix)  #, minw = 100 - already 105
 n_obs <- nrow(data_matrix)
-mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
-mc_cv
-saveRDS(mc_cv, "mc_cv_bubble_df_daly.rds")
+#mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
+#mc_cv
+#saveRDS(mc_cv, "mc_cv_bubble_df_daly.rds")
 # for the next time:
-# mc_cv_bubble_df_daly <- readRDS("mc_cv.rds")
+mc_cv <- readRDS("mc_cv_bubble_df_daly.rds")
 
 summary(est_results, cv = mc_cv)
-bubble_dates <- datestamp(est_results, cv = mc_cv)
+bubble_dates <- datestamp(est_results, cv = mc_cv, p = 0.01)
 series_names <- names(data_matrix)  # Exclude Date column
 dummy_matrix <- matrix(0L, nrow = nrow(df_daly), ncol = length(series_names))
 colnames(dummy_matrix) <- paste0(series_names, "_dummy") # e.g., CODALY_dummy
@@ -234,12 +238,12 @@ for (series in series_names) {
 df_final_dataset <- bind_cols(df_daly, as_tibble(dummy_matrix))
 head(df_final_dataset)
 
-saveRDS(df_final_dataset, here("data", "bubble_dummies_df_daly.rds"))
+saveRDS(df_final_dataset, here("R/data_R", "bubble_dummies_df_daly1.rds"))
 
 # Load it later (it will be exactly the same tibble)
-readRDS("data/bubble_dummies_df_daly.rds")
-df_final_dataset <- readRDS("data/bubble_dummies_df_daly.rds")
-names(df_final_dataset) <- gsub("_BD", "_dummy", names(df_final_dataset))
+df_final_dataset <- readRDS("R/data_R/bubble_dummies_df_daly.rds")
+names(df_final_dataset) <- gsub("_dummy", "_BD", names(df_final_dataset))
+head(df_final_dataset)
 
 ### ----Plot series with bubbles----
 
@@ -252,15 +256,8 @@ metal_map <- list(
   "Nickel"  = c(price = "NIDALY", dummy = "NIDALY_BD")
 )
 
-# metal_map <- list(
-#   "Cobalt"  = c(price = "CODALY", dummy = "CODALY_dummy"),
-#   "Copper"  = c(price = "CUDALY", dummy = "CUDALY_dummy"),
-#   "Lithium" = c(price = "LIDALY", dummy = "LIDALY_dummy"),
-#   "Nickel"  = c(price = "NIDALY", dummy = "NIDALY_dummy")
-# )
-
 # Create a folder to save plots (if it doesn't exist)
-if(!dir.exists("R/plots_timeline")) dir.create("R/plots_timeline")
+# if(!dir.exists("R/plots_timeline")) dir.create("R/plots_timeline")
 
 get_bubble_rects <- function(dates, dummy_col) {
   
@@ -305,7 +302,7 @@ for (metal_name in names(metal_map)) {
   
   # B. Get Rectangles for Shading
   # We extract the date and dummy column to find the intervals
-  rect_data <- get_bubble_rects(df_master$Date, df_master[[col_dummy]])
+  rect_data <- get_bubble_rects(df_final_dataset$Date, df_final_dataset[[col_dummy]])
   
   # C. Create Plot
   p <- ggplot() +
@@ -319,7 +316,7 @@ for (metal_name in names(metal_map)) {
     } +
     
     # Layer 2: The Price Line (Black)
-    geom_line(data = df_master, aes(x = Date, y = .data[[col_price]]), 
+    geom_line(data = df_final_dataset, aes(x = Date, y = .data[[col_price]]), 
               color = "black", linewidth = 0.6) +
     
     # Layer 3: Styling
@@ -341,7 +338,7 @@ for (metal_name in names(metal_map)) {
   print(p)
   
   ggsave(
-    filename = paste0("R/plots_timeline/Timeline_Shaded_", metal_name, ".png"), 
+    filename = paste0("R/plots_timeline/Bubble_Shaded_", metal_name, ".png"), 
     plot = p, 
     width = 10, 
     height = 6, 
@@ -356,7 +353,7 @@ library(patchwork) # Optional: Great for combining plots side-by-side
 final_plot <- (plot_list[["Cobalt"]] + plot_list[["Lithium"]]) / 
   (plot_list[["Nickel"]] + plot_list[["Copper"]])
 print(final_plot)
-ggsave("R/plots_timeline/All_Metals_Combined.png", final_plot, width = 12, height = 8)
+ggsave("R/plots_timeline/All_Metals_Bubbles.png", final_plot, width = 12, height = 8)
 
 
 
