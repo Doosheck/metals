@@ -249,8 +249,12 @@ sum(df_final_dataset$CUDALY_BD)
 #count bubbles in LIDALY:
 sum(df_final_dataset$NIDALY_BD)/nrow(df_final_dataset)
 
+<<<<<<< HEAD
 
 ##---- Alternative approach - with momentum -- start here!!!----
+=======
+### Alternative approach - with momentum -- start here!!!
+>>>>>>> db1fe78e9a2bdc7b77c4ff50acf84959e807e8dc
 # 1. Estimation with a more sensitive window (80 days)
 # This will help bring Copper and Cobalt back
 est_results <- radf(data_matrix, minw = 80)
