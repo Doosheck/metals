@@ -191,64 +191,52 @@ write.csv2(df_daly, "R/df_daly_raw.csv")
 
 ##---- Bubble detection:----
 ###---- Procedure for 4 series----
-data_matrix <- df_daly %>% 
-  select(-Date) %>% 
-  mutate(across(everything(), log)) %>% # Apply Natural Log to all series
-  as.data.frame()
+# 1. Filter and Log-Transform
+df_filtered <- df_daly %>% 
+  filter(Date >= as.Date("2017-11-01")) %>%
+  mutate(across(-Date, log))
 
-rownames(data_matrix) <- as.character(df_daly$Date)
+data_matrix <- as.data.frame(df_filtered[,-1])
+rownames(data_matrix) <- as.character(df_filtered$Date)
 
-est_results <- radf(data_matrix)  #, minw = 100 - already 105
-n_obs <- nrow(data_matrix)
-#mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
-#mc_cv
-#saveRDS(mc_cv, "mc_cv_bubble_df_daly.rds")
-# for the next time:
-mc_cv <- readRDS("mc_cv_bubble_df_daly.rds")
+# 2. GSADF Calculation
+est_results <- radf(data_matrix) #, minw = 105
+mc_cv <- radf_mc_cv(n = nrow(data_matrix), seed = 123) #minw = 105, 
+summary(est_results, cv = mc_cv) #show critical values:
+saveRDS(mc_cv, "mc_cv_bubble_df_daly_20171101.rds")
+#mc_cv <- readRDS("mc_cv_bubble_df_daly.rds")
 
-summary(est_results, cv = mc_cv)
-bubble_dates <- datestamp(est_results, cv = mc_cv, p = 0.01)
-series_names <- names(data_matrix)  # Exclude Date column
-dummy_matrix <- matrix(0L, nrow = nrow(df_daly), ncol = length(series_names))
-colnames(dummy_matrix) <- paste0(series_names, "_dummy") # e.g., CODALY_dummy
+# 3. Extract Dates (Significance 5%)
+bubble_dates <- datestamp(est_results, cv = mc_cv, p = 0.05)
 
-# Fill in 1s where bubbles are detected
+# 4. Create Dummies (Shortened logic)
+# We initialize a matrix of 0s matching the filtered data size
+series_names <- names(data_matrix)
+dummy_matrix <- matrix(0L, nrow = nrow(df_filtered), ncol = length(series_names))
+colnames(dummy_matrix) <- paste0(series_names, "_BD")
+
 for (series in series_names) {
-  
-  # Get the start/end periods for this specific series
   periods <- bubble_dates[[series]]
-  
-  # Check if any bubbles exist
   if (!is.null(periods) && nrow(periods) > 0) {
-    
-    # Loop through each detected bubble episode
     for (i in 1:nrow(periods)) {
-      # exuber returns row INDICES (integers), so we can use them directly
-      start_idx <- periods[i, "Start"]
-      end_idx   <- periods[i, "End"]
-      
-      # Find the column index in our dummy matrix that matches this series
-      col_idx <- which(colnames(dummy_matrix) == paste0(series, "_dummy"))
-      
-      # Set rows to 1
-      dummy_matrix[start_idx:end_idx, col_idx] <- 1L
+      # exuber returns indices relative to the input data_matrix
+      dummy_matrix[periods[i, "Start"]:periods[i, "End"], paste0(series, "_BD")] <- 1L
     }
   }
 }
-df_final_dataset <- bind_cols(df_daly, as_tibble(dummy_matrix))
-head(df_final_dataset)
 
-saveRDS(df_final_dataset, here("R/data_R", "bubble_dummies_df_daly1.rds"))
+# 5. Combine and SAVE ONLY THE NEW DATA
+df_final_dataset <- bind_cols(df_filtered, as_tibble(dummy_matrix))
+# Use a clear name to avoid loading old files
+saveRDS(df_final_dataset, "R/data_R/bubble_results_new_baseline.rds")
 
-# Load it later (it will be exactly the same tibble)
-df_final_dataset <- readRDS("R/data_R/bubble_dummies_df_daly.rds")
-names(df_final_dataset) <- gsub("_dummy", "_BD", names(df_final_dataset))
-head(df_final_dataset)
+#df_final_dataset <- readRDS("R/data_R/bubble_dummies_df_daly.rds")
+#count bubbles in LIDALY:
+sum(df_final_dataset$LIDALY_BD)/nrow(df_final_dataset)
+
 
 ### ----Plot series with bubbles----
 
-# Define a list mapping the "Pretty Name" to your specific column names.
-# Structure: "Metal Name" = c(Price_Column, Dummy_Column)
 metal_map <- list(
   "Cobalt"  = c(price = "CODALY", dummy = "CODALY_BD"),
   "Copper"  = c(price = "CUDALY", dummy = "CUDALY_BD"),
@@ -353,7 +341,7 @@ library(patchwork) # Optional: Great for combining plots side-by-side
 final_plot <- (plot_list[["Cobalt"]] + plot_list[["Lithium"]]) / 
   (plot_list[["Nickel"]] + plot_list[["Copper"]])
 print(final_plot)
-ggsave("R/plots_timeline/All_Metals_Bubbles.png", final_plot, width = 12, height = 8)
+ggsave("R/plots_timeline/All_Metals_Bubbles201711.png", final_plot, width = 12, height = 8)
 
 
 
