@@ -209,8 +209,7 @@ saveRDS(mc_cv, "mc_cv_bubble_df_daly_20171101.rds")
 # 3. Extract Dates (Significance 5%)
 bubble_dates <- datestamp(est_results, cv = mc_cv, p = 0.05)
 
-# 4. Create Dummies (Shortened logic)
-# We initialize a matrix of 0s matching the filtered data size
+# 4. Create Dummies with the 'Trend Filter'
 series_names <- names(data_matrix)
 dummy_matrix <- matrix(0L, nrow = nrow(df_filtered), ncol = length(series_names))
 colnames(dummy_matrix) <- paste0(series_names, "_BD")
@@ -219,20 +218,70 @@ for (series in series_names) {
   periods <- bubble_dates[[series]]
   if (!is.null(periods) && nrow(periods) > 0) {
     for (i in 1:nrow(periods)) {
-      # exuber returns indices relative to the input data_matrix
-      dummy_matrix[periods[i, "Start"]:periods[i, "End"], paste0(series, "_BD")] <- 1L
+      start_idx <- periods[i, "Start"]
+      end_idx   <- periods[i, "End"]
+      
+      # THE TREND FILTER: 
+      # Only mark as a bubble if price is higher than it was 5 days ago
+      # This kills the 'declining' bubbles in Lithium (2018-2020)
+      for (idx in start_idx:end_idx) {
+        if (idx > 5) {
+          # Compare current log-price to 5-day lagged log-price
+          if (data_matrix[idx, series] > data_matrix[idx - 5, series]) {
+            dummy_matrix[idx, paste0(series, "_BD")] <- 1L
+          }
+        }
+      }
     }
   }
 }
 
-# 5. Combine and SAVE ONLY THE NEW DATA
+# 5. Final Dataset Construction
 df_final_dataset <- bind_cols(df_filtered, as_tibble(dummy_matrix))
+
 # Use a clear name to avoid loading old files
 saveRDS(df_final_dataset, "R/data_R/bubble_results_new_baseline.rds")
 
 #df_final_dataset <- readRDS("R/data_R/bubble_dummies_df_daly.rds")
 #count bubbles in LIDALY:
-sum(df_final_dataset$LIDALY_BD)/nrow(df_final_dataset)
+sum(df_final_dataset$NIDALY_BD)/nrow(df_final_dataset)
+
+### Alternative approach - with momentum -- start here!!!
+# 1. Estimation with a more sensitive window (80 days)
+# This will help bring Copper and Cobalt back
+est_results <- radf(data_matrix, minw = 80)
+mc_cv <- radf_mc_cv(n = nrow(data_matrix), minw = 80, seed = 123)
+
+# 2. Extract Dates with a slightly more 'forgiving' threshold (p = 0.05)
+bubble_dates <- datestamp(est_results, cv = mc_cv, p = 0.05)
+
+# 3. Create Dummies with a 'Strict Growth' requirement
+dummy_matrix <- matrix(0L, nrow = nrow(df_filtered), ncol = length(series_names))
+colnames(dummy_matrix) <- paste0(series_names, "_BD")
+
+for (series in series_names) {
+  periods <- bubble_dates[[series]]
+  if (!is.null(periods) && nrow(periods) > 0) {
+    for (i in 1:nrow(periods)) {
+      start_idx <- periods[i, "Start"]
+      end_idx   <- periods[i, "End"]
+      
+      # FIX: Only label as a bubble if the price is ACTUALLY rising
+      # We compare current price to a 10-day lag. 
+      # If the price is flat or falling, we don't label it a bubble.
+      for (idx in start_idx:end_idx) {
+        if (idx > 10) {
+          # Check if current price is at least 1% higher than 10 days ago
+          # This kills the 'flat-top' bubbles in Lithium
+          growth <- (data_matrix[idx, series] - data_matrix[idx-10, series])
+          if (growth > 0) {
+            dummy_matrix[idx, paste0(series, "_BD")] <- 1L
+          }
+        }
+      }
+    }
+  }
+}
 
 
 ### ----Plot series with bubbles----
