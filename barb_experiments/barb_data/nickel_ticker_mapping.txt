@@ -1,0 +1,14 @@
+Nickel Price Series Ticker Mapping
+==================================
+
+Price_Nickel -> NIDALY
+Price_LME -> NILME
+Price_ETF -> NIETFN
+Price_SHFE -> NISHFE
+Price_WUXI -> NIWUXI
+Price_India -> NIINDI
+
+Data Summary:
+- Total rows: 2527
+- Date range: 2016-12-30 to 2025-05-13
+- Price series: 6

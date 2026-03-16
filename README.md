@@ -1,0 +1,2 @@
+# metals
+The repository contains the stript, which can be used to extract the prices of the metals from the **Daily Metal Prices** website. To run the script, specify the list of the metals and the time period for which the prices should be extracted in the fetch_dailymealprice.py file.
