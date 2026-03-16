@@ -1,0 +1,1228 @@
+---
+title: "GARCH Analysis for Metals - Within-Metal Correlations"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+# Required packages
+pkgs <- c("rugarch", "forecast", "tseries", "xts", "dplyr", "knitr", "rmgarch")
+missing <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+if(length(missing)) install.packages(missing)
+lapply(pkgs, library, character.only = TRUE)
+```
+
+```{r load-data}
+# Load data
+lithium = read.csv(here::here("data", "ALL_lithium_prices_cubic_spline.csv"))
+nickel = read.csv(here::here("data", "ALL_nickel_prices_cubic_spline.csv"))
+cobalt = read.csv(here::here("data", "ALL_cobalt_prices_cubic_spline.csv"))
+copper = read.csv(here::here("data", "ALL_copper_prices_cubic_spline.csv"))
+
+# Convert Date columns
+lithium$Date <- as.Date(lithium$Date)
+nickel$Date  <- as.Date(nickel$Date)
+cobalt$Date  <- as.Date(cobalt$Date)
+copper$Date  <- as.Date(copper$Date)
+
+lithium <- subset(lithium, select = -LISAME)
+
+# Display data
+head(lithium)
+head(nickel)
+head(cobalt)
+head(copper)
+```
+
+```{r calculate-returns}
+# Calculate simple (regular) returns for each metal
+# Each CSV has multiple price columns (6 for most, 7 for lithium minus LISAME)
+
+# Function to calculate returns
+calc_returns <- function(prices, dates) {
+  returns_df <- data.frame(Date = dates[-1])  # Remove first date
+  for(i in 1:ncol(prices)) {
+    returns <- diff(prices[,i]) / prices[-nrow(prices), i] * 100
+    returns_df[[colnames(prices)[i]]] <- returns
+  }
+  return(returns_df)
+}
+
+# Get all price columns (excluding Date)
+lithium_prices <- lithium[, -1]
+nickel_prices <- nickel[, -1]
+cobalt_prices <- cobalt[, -1]
+copper_prices <- copper[, -1]
+
+# Calculate returns
+lithium_returns_df <- calc_returns(lithium_prices, lithium$Date)
+nickel_returns_df <- calc_returns(nickel_prices, nickel$Date)
+cobalt_returns_df <- calc_returns(cobalt_prices, cobalt$Date)
+copper_returns_df <- calc_returns(copper_prices, copper$Date)
+
+# Show available series
+cat("\n=== LITHIUM PRICE SERIES ===\n")
+print(colnames(lithium_prices))
+cat("\n=== NICKEL PRICE SERIES ===\n")
+print(colnames(nickel_prices))
+cat("\n=== COBALT PRICE SERIES ===\n")
+print(colnames(cobalt_prices))
+cat("\n=== COPPER PRICE SERIES ===\n")
+print(colnames(copper_prices))
+```
+
+# LITHIUM ANALYSIS
+
+```{r lithium-plot-returns}
+# Plot all lithium returns series
+par(mfrow=c(ceiling(ncol(lithium_prices)/2), 2))
+for(i in 1:ncol(lithium_prices)) {
+  plot(lithium_returns_df$Date, lithium_returns_df[,i+1], type="l", 
+       main=paste("Lithium Returns -", colnames(lithium_prices)[i]), 
+       ylab="Returns (%)", xlab="Date", col="blue")
+}
+par(mfrow=c(1,1))
+```
+
+```{r lithium-arma-selection}
+cat("\n=== LITHIUM ARMA MODEL SELECTION FOR ALL SERIES ===\n\n")
+
+lithium_arma_orders <- list()
+lithium_arma_orders_auto <- list()
+lithium_returns_clean <- list()
+
+for(i in 1:ncol(lithium_prices)) {
+  series_name <- colnames(lithium_prices)[i]
+  cat("========================================\n")
+  cat("Series:", series_name, "\n")
+  cat("========================================\n\n")
+  
+  returns <- na.omit(lithium_returns_df[, i+1])
+  lithium_returns_clean[[series_name]] <- returns
+  
+  # ADF test
+  cat("--- Stationarity Test (", series_name, ") ---\n", sep="")
+  adf_test <- adf.test(returns)
+  print(adf_test)
+  
+  # Plot ACF and PACF for autocorrelation check
+  par(mfrow=c(2,1))
+  acf(returns, main=paste("ACF - Lithium", series_name), lag.max=30)
+  pacf(returns, main=paste("PACF - Lithium", series_name), lag.max=30)
+  par(mfrow=c(1,1))
+  
+  # Ljung-Box test for autocorrelation
+  cat("\n--- Ljung-Box Test for Autocorrelation (", series_name, ") ---\n", sep="")
+  lb_test <- Box.test(returns, lag=20, type="Ljung-Box")
+  print(lb_test)
+  if(lb_test$p.value < 0.05) {
+    cat("Significant autocorrelation detected (p < 0.05)\n\n")
+  } else {
+    cat("No significant autocorrelation detected (p >= 0.05)\n\n")
+  }
+  
+  # Compare ARMA(1,0) and ARMA(0,1) - Simple approach
+  cat("--- Simple Model Selection (", series_name, ") ---\n", sep="")
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+  
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best simple model
+  if(nrow(aic_results) > 0) {
+    best_simple <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nSimple Model Comparison:\n")
+    print(aic_results)
+    cat("\nBest Simple Model for", series_name, ":", best_simple$Model, "with AIC =", round(best_simple$AIC, 2), "\n")
+    
+    if(best_simple$Model == "ARMA(1,0)") {
+      lithium_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      lithium_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both simple models failed for", series_name, ", defaulting to ARMA(1,0)\n")
+    lithium_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  # Auto ARIMA selection - Best fit approach
+  cat("\n--- Auto Model Selection (", series_name, ") ---\n", sep="")
+  auto_model <- tryCatch({
+    auto.arima(returns, max.p=5, max.q=5, seasonal=FALSE, ic="aic", trace=TRUE)
+  }, error = function(e) {
+    cat("Auto ARIMA failed for", series_name, "\n")
+    NULL
+  })
+  
+  if(!is.null(auto_model)) {
+    p_auto <- auto_model$arma[1]
+    q_auto <- auto_model$arma[2]
+    lithium_arma_orders_auto[[series_name]] <- c(p_auto, q_auto)
+    cat("\nBest Auto Model for", series_name, ": ARMA(", p_auto, ",", q_auto, ") with AIC =", 
+        round(AIC(auto_model), 2), "\n", sep="")
+    
+    # Check residuals of auto model for remaining autocorrelation
+    cat("\n--- Residual Diagnostics for Auto Model (", series_name, ") ---\n", sep="")
+    residuals_auto <- residuals(auto_model)
+    lb_resid <- Box.test(residuals_auto, lag=20, type="Ljung-Box")
+    print(lb_resid)
+    if(lb_resid$p.value < 0.05) {
+      cat("Warning: Residuals still show autocorrelation for", series_name, "\n")
+    } else {
+      cat("Residuals appear to be white noise for", series_name, "\n")
+    }
+    
+    # Plot residual ACF
+    par(mfrow=c(1,2))
+    acf(residuals_auto, main=paste("ACF Residuals - Lithium", series_name), lag.max=30)
+    pacf(residuals_auto, main=paste("PACF Residuals - Lithium", series_name), lag.max=30)
+    par(mfrow=c(1,1))
+  } else {
+    lithium_arma_orders_auto[[series_name]] <- lithium_arma_orders[[series_name]]
+  }
+  
+  cat("\n--- Final Selection Summary for", series_name, "---\n")
+  cat("Simple approach: ARMA(", lithium_arma_orders[[series_name]][1], ",", 
+      lithium_arma_orders[[series_name]][2], ")\n", sep="")
+  cat("Auto approach: ARMA(", lithium_arma_orders_auto[[series_name]][1], ",", 
+      lithium_arma_orders_auto[[series_name]][2], ")\n", sep="")
+  cat("\n\n")
+}
+```
+
+```{r lithium-garch-fit}
+cat("\n=== LITHIUM UNIVARIATE GARCH MODELS ===\n\n")
+
+lithium_garch_fits <- list()
+lithium_garch_fits_auto <- list()
+
+for(i in 1:ncol(lithium_prices)) {
+  series_name <- colnames(lithium_prices)[i]
+  cat("========================================\n")
+  cat("Fitting GARCH for:", series_name, "\n")
+  cat("========================================\n\n")
+  
+  returns <- lithium_returns_clean[[series_name]]
+  
+  # Fit with simple ARMA order
+  cat("--- Simple ARMA approach for", series_name, "---\n")
+  p <- lithium_arma_orders[[series_name]][1]
+  q <- lithium_arma_orders[[series_name]][2]
+  cat("Using ARMA(", p, ",", q, ")\n", sep="")
+  
+  spec <- ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model = list(armaOrder = c(p, q), include.mean = TRUE),
+    distribution.model = "std"
+  )
+  
+  fit <- tryCatch({
+    ugarchfit(spec = spec, data = returns, solver = "hybrid")
+  }, error = function(e) {
+    cat("Failed with ARMA(", p, ",", q, ") for", series_name, ". Trying ARMA(1,0)...\n")
+    NULL
+  })
+  
+  if(is.null(fit) || convergence(fit) != 0) {
+    cat("Fitting simplified ARMA(1,0)-GARCH(1,1) model for", series_name, "\n")
+    spec <- ugarchspec(
+      variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+      mean.model = list(armaOrder = c(1, 0), include.mean = TRUE),
+      distribution.model = "std"
+    )
+    fit <- ugarchfit(spec = spec, data = returns, solver = "hybrid")
+    lithium_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  lithium_garch_fits[[series_name]] <- fit
+  cat("\nSimple ARMA-GARCH Results for", series_name, ":\n")
+  print(fit)
+  
+  if(convergence(fit) == 0) {
+    par(mfrow=c(2,2))
+    plot(fit, which = 1)
+    plot(fit, which = 3)
+    plot(fit, which = 8)
+    plot(fit, which = 9)
+    par(mfrow=c(1,1))
+  }
+  
+  # Fit with auto ARMA order
+  cat("\n--- Auto ARMA approach for", series_name, "---\n")
+  p_auto <- lithium_arma_orders_auto[[series_name]][1]
+  q_auto <- lithium_arma_orders_auto[[series_name]][2]
+  cat("Using ARMA(", p_auto, ",", q_auto, ")\n", sep="")
+  
+  spec_auto <- ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model = list(armaOrder = c(p_auto, q_auto), include.mean = TRUE),
+    distribution.model = "std"
+  )
+  
+  fit_auto <- tryCatch({
+    ugarchfit(spec = spec_auto, data = returns, solver = "hybrid")
+  }, error = function(e) {
+    cat("Failed with auto ARMA(", p_auto, ",", q_auto, ") for", series_name, "\n")
+    NULL
+  })
+  
+  if(is.null(fit_auto) || convergence(fit_auto) != 0) {
+    cat("Auto model failed, using simple model for", series_name, "\n")
+    fit_auto <- fit
+  }
+  
+  lithium_garch_fits_auto[[series_name]] <- fit_auto
+  cat("\nAuto ARMA-GARCH Results for", series_name, ":\n")
+  print(fit_auto)
+  
+  if(convergence(fit_auto) == 0) {
+    par(mfrow=c(2,2))
+    plot(fit_auto, which = 1)
+    plot(fit_auto, which = 3)
+    plot(fit_auto, which = 8)
+    plot(fit_auto, which = 9)
+    par(mfrow=c(1,1))
+  }
+  
+  cat("\n")
+}
+
+cat("\n=== Using AUTO ARMA orders for DCC-GARCH ===\n\n")
+```
+
+```{r lithium-dcc-garch}
+cat("\n=== LITHIUM DCC-GARCH MODEL ===\n")
+
+# Create returns matrix
+lithium_returns_matrix <- as.matrix(lithium_returns_df[, -1])
+colnames(lithium_returns_matrix) <- colnames(lithium_prices)
+
+# Remove rows with any NA
+lithium_returns_matrix <- na.omit(lithium_returns_matrix)
+
+# First fit univariate GARCH models
+uspec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+# Use the same specification for all series (simplification for robustness)
+multispec <- multispec(replicate(ncol(lithium_returns_matrix), uspec))
+
+# Fit multivariate model first
+multifit <- multifit(multispec, lithium_returns_matrix)
+
+# DCC specification
+dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
+
+# Fit DCC model
+dcc_fit_lithium <- tryCatch({
+  dccfit(dcc_spec, data = lithium_returns_matrix, fit.control = list(eval.se = FALSE))
+}, error = function(e) {
+  cat("DCC fitting failed, trying with pre-fitted models...\n")
+  dccfit(dcc_spec, data = lithium_returns_matrix, fit = multifit, 
+         fit.control = list(eval.se = FALSE))
+})
+
+print(dcc_fit_lithium)
+
+# Extract and plot dynamic correlations
+if(class(dcc_fit_lithium)[1] == "DCCfit") {
+  dcc_cor <- rcor(dcc_fit_lithium)
+  n_series <- ncol(lithium_prices)
+  
+  # Plot each pairwise correlation separately
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      plot(dcc_cor[i,j,], type="l", 
+           main=paste("Lithium:", colnames(lithium_prices)[i], "-", colnames(lithium_prices)[j]),
+           ylab="Correlation", xlab="Time", col="darkblue", lwd=2)
+      abline(h=mean(dcc_cor[i,j,]), col="red", lty=2)
+      legend("topright", legend=paste("Mean =", round(mean(dcc_cor[i,j,]), 3)), 
+             col="red", lty=2, cex=0.8)
+    }
+  }
+} else {
+  cat("DCC model fitting unsuccessful\n")
+}
+```
+
+# NICKEL ANALYSIS
+
+```{r nickel-plot-returns}
+# Plot all nickel returns series
+par(mfrow=c(ceiling(ncol(nickel_prices)/2), 2))
+for(i in 1:ncol(nickel_prices)) {
+  plot(nickel_returns_df$Date, nickel_returns_df[,i+1], type="l", 
+       main=paste("Nickel Returns -", colnames(nickel_prices)[i]), 
+       ylab="Returns (%)", xlab="Date", col="blue")
+}
+par(mfrow=c(1,1))
+```
+
+```{r nickel-arma-selection}
+cat("\n=== NICKEL ARMA MODEL SELECTION FOR ALL SERIES ===\n\n")
+
+nickel_arma_orders <- list()
+nickel_returns_clean <- list()
+
+for(i in 1:ncol(nickel_prices)) {
+  series_name <- colnames(nickel_prices)[i]
+  cat("--- Series:", series_name, "---\n")
+  
+  returns <- na.omit(nickel_returns_df[, i+1])
+  nickel_returns_clean[[series_name]] <- returns
+  
+  adf_test <- adf.test(returns)
+  print(adf_test)
+  
+  # Compare ARMA(1,0) and ARMA(0,1)
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+  
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best model
+  if(nrow(aic_results) > 0) {
+    best_model <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nModel Comparison:\n")
+    print(aic_results)
+    cat("\nBest Model:", best_model$Model, "with AIC =", best_model$AIC, "\n")
+    
+    if(best_model$Model == "ARMA(1,0)") {
+      nickel_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      nickel_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both models failed, defaulting to ARMA(1,0)\n")
+    nickel_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", 
+              nickel_arma_orders[[series_name]][1], 
+              nickel_arma_orders[[series_name]][2], 
+              series_name))
+}
+```
+
+```{r nickel-garch-fit}
+cat("\n=== NICKEL UNIVARIATE GARCH MODELS ===\n\n")
+
+nickel_garch_fits <- list()
+
+for(i in 1:ncol(nickel_prices)) {
+  series_name <- colnames(nickel_prices)[i]
+  cat("--- Fitting GARCH for:", series_name, "---\n")
+  
+  returns <- nickel_returns_clean[[series_name]]
+  p <- nickel_arma_orders[[series_name]][1]
+  q <- nickel_arma_orders[[series_name]][2]
+  
+  spec <- ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model = list(armaOrder = c(p, q), include.mean = TRUE),
+    distribution.model = "std"
+  )
+  
+  fit <- tryCatch({
+    ugarchfit(spec = spec, data = returns, solver = "hybrid")
+  }, error = function(e) {
+    cat("Failed with ARMA(", p, ",", q, "). Trying ARMA(1,1)...\n")
+    NULL
+  })
+  
+  if(is.null(fit) || convergence(fit) != 0) {
+    cat("Fitting simplified ARMA(1,1)-GARCH(1,1) model\n")
+    spec <- ugarchspec(
+      variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+      mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+      distribution.model = "std"
+    )
+    fit <- ugarchfit(spec = spec, data = returns, solver = "hybrid")
+    nickel_arma_orders[[series_name]] <- c(1, 1)
+  }
+  
+  nickel_garch_fits[[series_name]] <- fit
+  print(fit)
+  
+  if(convergence(fit) == 0) {
+    par(mfrow=c(2,2))
+    plot(fit, which = 1)
+    plot(fit, which = 3)
+    plot(fit, which = 8)
+    plot(fit, which = 9)
+    par(mfrow=c(1,1))
+  }
+  cat("\n")
+}
+```
+
+```{r nickel-dcc-garch}
+cat("\n=== NICKEL DCC-GARCH MODEL ===\n")
+
+nickel_returns_matrix <- as.matrix(nickel_returns_df[, -1])
+colnames(nickel_returns_matrix) <- colnames(nickel_prices)
+nickel_returns_matrix <- na.omit(nickel_returns_matrix)
+
+uspec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+multispec <- multispec(replicate(ncol(nickel_returns_matrix), uspec))
+multifit <- multifit(multispec, nickel_returns_matrix)
+
+dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
+
+dcc_fit_nickel <- tryCatch({
+  dccfit(dcc_spec, data = nickel_returns_matrix, fit.control = list(eval.se = FALSE))
+}, error = function(e) {
+  cat("DCC fitting failed, trying with pre-fitted models...\n")
+  dccfit(dcc_spec, data = nickel_returns_matrix, fit = multifit, 
+         fit.control = list(eval.se = FALSE))
+})
+
+print(dcc_fit_nickel)
+
+if(class(dcc_fit_nickel)[1] == "DCCfit") {
+  dcc_cor <- rcor(dcc_fit_nickel)
+  n_series <- ncol(nickel_prices)
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      plot(dcc_cor[i,j,], type="l", 
+           main=paste("Nickel:", colnames(nickel_prices)[i], "-", colnames(nickel_prices)[j]),
+           ylab="Correlation", xlab="Time", col="darkblue", lwd=2)
+      abline(h=mean(dcc_cor[i,j,]), col="red", lty=2)
+      legend("topright", legend=paste("Mean =", round(mean(dcc_cor[i,j,]), 3)), 
+             col="red", lty=2, cex=0.8)
+    }
+  }
+} else {
+  cat("DCC model fitting unsuccessful\n")
+}
+```
+
+```{r nickel-added-BBS}
+
+nickel_returns_matrix <- as.matrix(nickel_returns_df[, c(-1, -4)])
+nickel_returns_matrix <- na.omit(nickel_returns_matrix)
+
+uspec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+multispec <- multispec(replicate(ncol(nickel_returns_matrix), uspec))
+multifit <- multifit(multispec, nickel_returns_matrix)
+
+dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
+
+dcc_fit_nickel <- dccfit(dcc_spec, data = as.matrix(nickel_returns_matrix * 100), 
+              solver = "solnp") #�solnp�, �nlminb�, �lbfgs�, �gosolnp�
+
+print(dcc_fit_nickel)
+```
+```{r DCC_nickel_added_BBS}
+# 1. Wyci�gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
+cor_array <- rcor(dcc_fit_nickel) 
+n_obs_model <- dim(cor_array)[3]
+# Wybieramy TYLKO te daty, kt�re odpowiadaj� wynikom modelu
+dates_aligned <- tail(nickel_returns_df$Date, n_obs_model)
+
+# 2. Pobieramy nazwy metali 
+metal_names <- colnames(nickel_returns_matrix) 
+n <- length(metal_names)
+
+# 3. Tworzymy list� wszystkich par (10 kombinacji)
+lista_korelacji <- list()
+k <- 1
+
+for(i in 1:(n-1)) {
+  for(j in (i+1):n) {
+    lista_korelacji[[k]] <- data.frame(
+      Date = dates_aligned,
+      Para = paste(metal_names[i], metal_names[j], sep = " vs "),
+      Wartosc = cor_array[i, j, ]
+    )
+    k <- k + 1
+  }
+}
+
+# 4. ��czymy wszystko w jedn� d�ug� tabel�
+df_plot <- bind_rows(lista_korelacji)
+
+# 5. Rysujemy 10 wykres�w w siatce (facet_wrap)
+dcc_plot_NI <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
+  geom_line(color = "darkblue", linewidth = 0.5) +
+  facet_wrap(~Para, ncol = 2, scales = "free_y") + # 2 kolumny, 5 wierszy
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years") + # Poprawne daty
+  theme_minimal(base_size = 12) + 
+  labs(
+    title = NULL, # Brak tytu�u g��wnego
+    x = NULL, 
+    y = ""
+  ) +
+  theme(
+    strip.text = element_text(face = "bold"), # Pogrubione nazwy par
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(filename = here::here("outputs", "figures", "dcc_garch", "DCC_nickel.pdf"), 
+       plot = dcc_plot_NI, 
+       width = 12, 
+       height = 10)
+
+```
+
+
+# COBALT ANALYSIS
+
+```{r cobalt-plot-returns}
+# Plot all cobalt returns series
+par(mfrow=c(ceiling(ncol(cobalt_prices)/2), 2))
+for(i in 1:ncol(cobalt_prices)) {
+  plot(cobalt_returns_df$Date, cobalt_returns_df[,i+1], type="l", 
+       main=paste("Cobalt Returns -", colnames(cobalt_prices)[i]), 
+       ylab="Returns (%)", xlab="Date", col="blue")
+}
+par(mfrow=c(1,1))
+```
+
+```{r cobalt-arma-selection}
+cat("\n=== COBALT ARMA MODEL SELECTION FOR ALL SERIES ===\n\n")
+
+cobalt_arma_orders <- list()
+cobalt_returns_clean <- list()
+
+for(i in 1:ncol(cobalt_prices)) {
+  series_name <- colnames(cobalt_prices)[i]
+  cat("--- Series:", series_name, "---\n")
+  
+  returns <- na.omit(cobalt_returns_df[, i+1])
+  cobalt_returns_clean[[series_name]] <- returns
+  
+  adf_test <- adf.test(returns)
+  print(adf_test)
+  
+  # Compare ARMA(1,0) and ARMA(0,1)
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+  
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best model
+  if(nrow(aic_results) > 0) {
+    best_model <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nModel Comparison:\n")
+    print(aic_results)
+    cat("\nBest Model:", best_model$Model, "with AIC =", best_model$AIC, "\n")
+    
+    if(best_model$Model == "ARMA(1,0)") {
+      cobalt_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      cobalt_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both models failed, defaulting to ARMA(1,0)\n")
+    cobalt_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", 
+              cobalt_arma_orders[[series_name]][1], 
+              cobalt_arma_orders[[series_name]][2], 
+              series_name))
+}
+```
+
+```{r cobalt-garch-fit}
+cat("\n=== COBALT UNIVARIATE GARCH MODELS ===\n\n")
+
+cobalt_garch_fits <- list()
+
+for(i in 1:ncol(cobalt_prices)) {
+  series_name <- colnames(cobalt_prices)[i]
+  cat("--- Fitting GARCH for:", series_name, "---\n")
+  
+  returns <- cobalt_returns_clean[[series_name]]
+  
+  # Check for issues with the data
+  if(length(returns) < 100) {
+    cat("Warning: Series has too few observations. Skipping.\n\n")
+    next
+  }
+  
+  if(sd(returns, na.rm=TRUE) < 1e-6) {
+    cat("Warning: Series has zero or near-zero variance. Skipping.\n\n")
+    next
+  }
+  
+  if(sum(is.infinite(returns)) > 0) {
+    cat("Warning: Series contains infinite values. Skipping.\n\n")
+    next
+  }
+  
+  p <- cobalt_arma_orders[[series_name]][1]
+  q <- cobalt_arma_orders[[series_name]][2]
+  
+  # Try different solvers in order of preference
+  solvers <- c("solnp", "gosolnp", "hybrid", "nlminb")
+  fit <- NULL
+  
+  for(solver in solvers) {
+    if(!is.null(fit)) break
+    
+    spec <- ugarchspec(
+      variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+      mean.model = list(armaOrder = c(p, q), include.mean = TRUE),
+      distribution.model = "std"
+    )
+    
+    fit <- tryCatch({
+      ugarchfit(spec = spec, data = returns, solver = solver, 
+                fit.control = list(scale = 1))
+    }, error = function(e) {
+      cat("Solver", solver, "failed with ARMA(", p, ",", q, ")\n")
+      NULL
+    }, warning = function(w) {
+      NULL
+    })
+  }
+  
+  # If original ARMA fails, try simpler models
+  if(is.null(fit) || convergence(fit) != 0) {
+    cat("Trying simplified ARMA(1,1)-GARCH(1,1) model\n")
+    
+    for(solver in solvers) {
+      if(!is.null(fit) && convergence(fit) == 0) break
+      
+      spec <- ugarchspec(
+        variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+        mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+        distribution.model = "std"
+      )
+      
+      fit <- tryCatch({
+        ugarchfit(spec = spec, data = returns, solver = solver,
+                  fit.control = list(scale = 1))
+      }, error = function(e) NULL, warning = function(w) NULL)
+    }
+    
+    if(!is.null(fit) && convergence(fit) == 0) {
+      cobalt_arma_orders[[series_name]] <- c(1, 1)
+    }
+  }
+  
+  # Last resort: simplest model
+  if(is.null(fit) || convergence(fit) != 0) {
+    cat("Trying ARMA(0,0)-GARCH(1,1) model\n")
+    
+    for(solver in solvers) {
+      if(!is.null(fit) && convergence(fit) == 0) break
+      
+      spec <- ugarchspec(
+        variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+        mean.model = list(armaOrder = c(0, 0), include.mean = TRUE),
+        distribution.model = "std"
+      )
+      
+      fit <- tryCatch({
+        ugarchfit(spec = spec, data = returns, solver = solver,
+                  fit.control = list(scale = 1))
+      }, error = function(e) NULL, warning = function(w) NULL)
+    }
+    
+    if(!is.null(fit) && convergence(fit) == 0) {
+      cobalt_arma_orders[[series_name]] <- c(0, 0)
+    }
+  }
+  
+  if(!is.null(fit) && convergence(fit) == 0) {
+    cobalt_garch_fits[[series_name]] <- fit
+    print(fit)
+    
+    tryCatch({
+      par(mfrow=c(2,2))
+      plot(fit, which = 1)
+      plot(fit, which = 3)
+      plot(fit, which = 8)
+      plot(fit, which = 9)
+      par(mfrow=c(1,1))
+    }, error = function(e) {
+      cat("Plotting failed:", e$message, "\n")
+    })
+  } else {
+    cat("All models failed for this series.\n")
+  }
+  cat("\n")
+}
+
+cat("Successfully fitted", length(cobalt_garch_fits), "out of", ncol(cobalt_prices), "series\n")
+```
+
+```{r cobalt-dcc-garch}
+cat("\n=== COBALT DCC-GARCH MODEL ===\n")
+
+cobalt_returns_matrix <- as.matrix(cobalt_returns_df[, -1])
+colnames(cobalt_returns_matrix) <- colnames(cobalt_prices)
+cobalt_returns_matrix <- na.omit(cobalt_returns_matrix)
+
+uspec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+multispec <- multispec(replicate(ncol(cobalt_returns_matrix), uspec))
+multifit <- multifit(multispec, cobalt_returns_matrix)
+
+dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
+
+dcc_fit_cobalt <- tryCatch({
+  dccfit(dcc_spec, data = cobalt_returns_matrix, fit.control = list(eval.se = FALSE))
+}, error = function(e) {
+  cat("DCC fitting failed, trying with pre-fitted models...\n")
+  dccfit(dcc_spec, data = cobalt_returns_matrix, fit = multifit, 
+         fit.control = list(eval.se = FALSE))
+})
+
+print(dcc_fit_cobalt)
+
+if(class(dcc_fit_cobalt)[1] == "DCCfit") {
+  dcc_cor <- rcor(dcc_fit_cobalt)
+  n_series <- ncol(cobalt_prices)
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      plot(dcc_cor[i,j,], type="l", 
+           main=paste("Cobalt:", colnames(cobalt_prices)[i], "-", colnames(cobalt_prices)[j]),
+           ylab="Correlation", xlab="Time", col="darkblue", lwd=2)
+      abline(h=mean(dcc_cor[i,j,]), col="red", lty=2)
+      legend("topright", legend=paste("Mean =", round(mean(dcc_cor[i,j,]), 3)), 
+             col="red", lty=2, cex=0.8)
+    }
+  }
+} else {
+  cat("DCC model fitting unsuccessful\n")
+}
+```
+
+# COPPER ANALYSIS
+
+```{r copper-plot-returns}
+# Plot all copper returns series
+par(mfrow=c(ceiling(ncol(copper_prices)/2), 2))
+for(i in 1:ncol(copper_prices)) {
+  plot(copper_returns_df$Date, copper_returns_df[,i+1], type="l", 
+       main=paste("Copper Returns -", colnames(copper_prices)[i]), 
+       ylab="Returns (%)", xlab="Date", col="blue")
+}
+par(mfrow=c(1,1))
+```
+
+```{r copper-arma-selection}
+cat("\n=== COPPER ARMA MODEL SELECTION FOR ALL SERIES ===\n\n")
+
+copper_arma_orders <- list()
+copper_returns_clean <- list()
+
+for(i in 1:ncol(copper_prices)) {
+  series_name <- colnames(copper_prices)[i]
+  cat("--- Series:", series_name, "---\n")
+  
+  returns <- na.omit(copper_returns_df[, i+1])
+  copper_returns_clean[[series_name]] <- returns
+  
+  adf_test <- adf.test(returns)
+  print(adf_test)
+  
+  # Compare ARMA(1,0) and ARMA(0,1)
+  aic_results <- data.frame(Model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+  
+  # Try ARMA(1,0)
+  model_10 <- tryCatch({
+    arima(returns, order = c(1, 0, 0), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_10)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(1,0)", AIC = AIC(model_10)))
+  }
+  
+  # Try ARMA(0,1)
+  model_01 <- tryCatch({
+    arima(returns, order = c(0, 0, 1), include.mean = TRUE)
+  }, error = function(e) NULL)
+  
+  if(!is.null(model_01)) {
+    aic_results <- rbind(aic_results, data.frame(Model = "ARMA(0,1)", AIC = AIC(model_01)))
+  }
+  
+  # Select best model
+  if(nrow(aic_results) > 0) {
+    best_model <- aic_results[which.min(aic_results$AIC), ]
+    cat("\nModel Comparison:\n")
+    print(aic_results)
+    cat("\nBest Model:", best_model$Model, "with AIC =", best_model$AIC, "\n")
+    
+    if(best_model$Model == "ARMA(1,0)") {
+      copper_arma_orders[[series_name]] <- c(1, 0)
+    } else {
+      copper_arma_orders[[series_name]] <- c(0, 1)
+    }
+  } else {
+    cat("Both models failed, defaulting to ARMA(1,0)\n")
+    copper_arma_orders[[series_name]] <- c(1, 0)
+  }
+  
+  cat(sprintf("Selected ARMA(%d,%d) for %s\n\n", 
+              copper_arma_orders[[series_name]][1], 
+              copper_arma_orders[[series_name]][2], 
+              series_name))
+}
+```
+
+```{r copper-garch-fit}
+cat("\n=== COPPER UNIVARIATE GARCH MODELS ===\n\n")
+
+copper_garch_fits <- list()
+
+for(i in 1:ncol(copper_prices)) {
+  series_name <- colnames(copper_prices)[i]
+  cat("--- Fitting GARCH for:", series_name, "---\n")
+  
+  returns <- copper_returns_clean[[series_name]]
+  p <- copper_arma_orders[[series_name]][1]
+  q <- copper_arma_orders[[series_name]][2]
+  
+  spec <- ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model = list(armaOrder = c(p, q), include.mean = TRUE),
+    distribution.model = "std"
+  )
+  
+  fit <- tryCatch({
+    ugarchfit(spec = spec, data = returns, solver = "hybrid")
+  }, error = function(e) {
+    cat("Failed with ARMA(", p, ",", q, "). Trying ARMA(1,1)...\n")
+    NULL
+  })
+  
+  if(is.null(fit) || convergence(fit) != 0) {
+    cat("Fitting simplified ARMA(1,1)-GARCH(1,1) model\n")
+    spec <- ugarchspec(
+      variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+      mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+      distribution.model = "std"
+    )
+    fit <- ugarchfit(spec = spec, data = returns, solver = "hybrid")
+    copper_arma_orders[[series_name]] <- c(1, 1)
+  }
+  
+  copper_garch_fits[[series_name]] <- fit
+  print(fit)
+  
+  if(convergence(fit) == 0) {
+    par(mfrow=c(2,2))
+    plot(fit, which = 1)
+    plot(fit, which = 3)
+    plot(fit, which = 8)
+    plot(fit, which = 9)
+    par(mfrow=c(1,1))
+  }
+  cat("\n")
+}
+```
+
+```{r copper-dcc-garch_adjusted_BBS}
+cat("\n=== COPPER DCC-GARCH MODEL ===\n")
+
+copper_returns_matrix <- as.matrix(copper_returns_df[, c(-1, -7)])
+#colnames(copper_returns_matrix) <- colnames(copper_prices)
+copper_returns_matrix <- na.omit(copper_returns_matrix)
+
+uspec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 1), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+multispec <- multispec(replicate(ncol(copper_returns_matrix), uspec))
+multifit <- multifit(multispec, copper_returns_matrix)
+
+dcc_spec <- dccspec(uspec = multispec, dccOrder = c(1, 1), distribution = "mvt")
+
+dcc_fit_copper <- dccfit(dcc_spec, data = as.matrix(copper_returns_matrix * 100), 
+              solver = "solnp") #�solnp�, �nlminb�, �lbfgs�, �gosolnp�
+#dcc_fit_copper <- tryCatch({
+  #dccfit(dcc_spec, data = copper_returns_matrix, fit.control = list(eval.se = FALSE))
+#}, error = function(e) {
+  #cat("DCC fitting failed, trying with pre-fitted models...\n")
+  #dccfit(dcc_spec, data = copper_returns_matrix, fit = multifit, 
+        # fit.control = list(eval.se = FALSE))
+#})
+print(dcc_fit_copper)
+```
+
+
+```{r copper-dcc-garch_added_BBS}
+# 1. Wyci�gamy macierz korelacji (wymiary: 5 x 5 x liczba_dni)
+cor_array <- rcor(dcc_fit_copper) 
+n_obs_model <- dim(cor_array)[3]
+# Wybieramy TYLKO te daty, kt�re odpowiadaj� wynikom modelu
+dates_aligned <- tail(copper_returns_df$Date, n_obs_model)
+
+# 2. Pobieramy nazwy metali 
+metal_names <- colnames(copper_returns_matrix) 
+n <- length(metal_names)
+
+# 3. Tworzymy list� wszystkich par (10 kombinacji)
+lista_korelacji <- list()
+k <- 1
+
+for(i in 1:(n-1)) {
+  for(j in (i+1):n) {
+    lista_korelacji[[k]] <- data.frame(
+      Date = dates_aligned,
+      Para = paste(metal_names[i], metal_names[j], sep = " vs "),
+      Wartosc = cor_array[i, j, ]
+    )
+    k <- k + 1
+  }
+}
+
+# 4. ��czymy wszystko w jedn� d�ug� tabel�
+df_plot <- bind_rows(lista_korelacji)
+
+# 5. Rysujemy 10 wykres�w w siatce (facet_wrap)
+dcc_plot_CU <- ggplot(df_plot, aes(x = Date, y = Wartosc)) +
+  geom_line(color = "darkblue", linewidth = 0.5) +
+  facet_wrap(~Para, ncol = 2, scales = "free_y") + # 2 kolumny, 5 wierszy
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years") + # Poprawne daty
+  theme_minimal(base_size = 12) + # Mniejsza czcionka, �eby 10 wykres�w si� zmie�ci�o
+  labs(
+    title = NULL, # Brak tytu�u g��wnego
+    x = NULL, 
+    y = ""
+  ) +
+  theme(
+    strip.text = element_text(face = "bold"), # Pogrubione nazwy par
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(filename = here::here("outputs", "figures", "dcc_garch", "DCC_copper.pdf"), 
+       plot = dcc_plot_CU, 
+       width = 12, 
+       height = 10)
+
+```
+
+
+```{r copper-dcc-garch}
+if(class(dcc_fit_copper)[1] == "DCCfit") {
+  dcc_cor <- rcor(dcc_fit_copper)
+  n_series <- ncol(copper_prices)
+  
+  for(i in 1:(n_series-1)) {
+    for(j in (i+1):n_series) {
+      plot(dcc_cor[i,j,], type="l", 
+           main=paste("Copper:", colnames(copper_prices)[i], "-", colnames(copper_prices)[j]),
+           ylab="Correlation", xlab="Time", col="darkblue", lwd=2)
+      abline(h=mean(dcc_cor[i,j,]), col="red", lty=2)
+      legend("topright", legend=paste("Mean =", round(mean(dcc_cor[i,j,]), 3)), 
+             col="red", lty=2, cex=0.8)
+    }
+  }
+} else {
+  cat("DCC model fitting unsuccessful\n")
+}
+```
+
+# SUMMARY
+
+```{r summary-tables}
+# Create summary tables for each metal
+
+# Lithium summary
+lithium_summary <- data.frame(
+  Series = names(lithium_arma_orders),
+  ARMA_Order = sapply(lithium_arma_orders, function(x) sprintf("(%d,%d)", x[1], x[2])),
+  GARCH_Order = "(1,1)",
+  Distribution = "Student-t"
+)
+
+# Nickel summary
+nickel_summary <- data.frame(
+  Series = names(nickel_arma_orders),
+  ARMA_Order = sapply(nickel_arma_orders, function(x) sprintf("(%d,%d)", x[1], x[2])),
+  GARCH_Order = "(1,1)",
+  Distribution = "Student-t"
+)
+
+# Cobalt summary
+cobalt_summary <- data.frame(
+  Series = names(cobalt_arma_orders),
+  ARMA_Order = sapply(cobalt_arma_orders, function(x) sprintf("(%d,%d)", x[1], x[2])),
+  GARCH_Order = "(1,1)",
+  Distribution = "Student-t"
+)
+
+# Copper summary
+copper_summary <- data.frame(
+  Series = names(copper_arma_orders),
+  ARMA_Order = sapply(copper_arma_orders, function(x) sprintf("(%d,%d)", x[1], x[2])),
+  GARCH_Order = "(1,1)",
+  Distribution = "Student-t"
+)
+
+cat("\n=== LITHIUM MODELS SUMMARY ===\n")
+kable(lithium_summary, caption = "Lithium GARCH Models")
+
+cat("\n=== NICKEL MODELS SUMMARY ===\n")
+kable(nickel_summary, caption = "Nickel GARCH Models")
+
+cat("\n=== COBALT MODELS SUMMARY ===\n")
+kable(cobalt_summary, caption = "Cobalt GARCH Models")
+
+cat("\n=== COPPER MODELS SUMMARY ===\n")
+kable(copper_summary, caption = "Copper GARCH Models")
+```
+
+
+# Inter-metal DCC 
+```{r data_prep}
+dcc_data <- copper %>% select(Date, CULMEX) %>%
+  inner_join(nickel %>% select(Date, NILMEX), by = "Date") %>%
+  inner_join(lithium %>% select(Date, LILMEX), by = "Date") %>%
+  inner_join(cobalt %>% select(Date, COLMEX), by = "Date") %>%
+  na.omit()
+head(dcc_data, 30)
+```
+```{r prices_plot}
+library(ggplot2)
+library(tidyr) 
+
+dcc_data %>%
+  pivot_longer(-Date, names_to = "Metal", values_to = "Price") %>%
+  ggplot(aes(x = Date, y = Price, color = Metal)) +
+  geom_line() +
+  facet_wrap(~Metal, scales = "free_y") + 
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
+
+```{r returns}
+dcc_returns <- dcc_data %>%
+  mutate(across(-Date, ~ log(. / lag(.)))) %>%
+  na.omit()
+tail(dcc_returns, 10)
+
+```
+
+```{r ACF_PACF_sq_ret}
+par(mfrow = c(4, 2), mar = c(2, 2, 2, 1))
+# ACF i PACF dla zwrot�w:
+for (col_name in names(dcc_returns)[-1]) {
+  acf(dcc_returns[[col_name]], main = paste("ACF:", col_name), lag.max = 20)
+  pacf(dcc_returns[[col_name]], main = paste("PACF:", col_name), lag.max = 20)
+}
+```
+
+
+```{r ACF_PACF_sq_ret}
+
+par(mfrow = c(4, 2), mar = c(2, 2, 2, 1))
+# ACF i PACF dla kwadrat�w zwrot�w:
+for (col_name in names(dcc_returns)[-1]) {
+  acf((dcc_returns[[col_name]])^2, main = paste("ACF:", col_name), lag.max = 20)
+  pacf((dcc_returns[[col_name]])^2, main = paste("PACF:", col_name), lag.max = 20)
+}
+
+par(mfrow = c(1, 1))
+
+```
+```{r GARCH_MGARCH}
+# 1. Specyfikacja pojedynczego modelu (AR(1), GJR-GARCH(1,1), t-Student)
+uspec <- ugarchspec(
+  variance.model = list(model = "fiGARCH", garchOrder = c(1,1)),
+  mean.model = list(armaOrder = c(1,0)),
+  distribution.model = "std"
+)
+
+# 2. Powielenie specyfikacji dla 4 szereg�w
+mspec <- multispec(replicate(4, uspec))
+
+# 3. Specyfikacja DCC (DCC(1,1), wielowymiarowy rozk�ad t-Studenta)
+dspec <- dccspec(mspec, dccOrder = c(1,1), model = "DCC", distribution = "mvt")
+```
+
+```{r test_modeli}
+test_fit <- ugarchfit(spec = uspec, data = dcc_returns[,4] * 100)
+print(test_fit)
+```
+
+
+
+```{r GARCH_MGARCH}
+# 4. Estymacja modelu (dane dcc_returns bez kolumny Date!)
+fit <- dccfit(dspec, data = as.matrix(dcc_returns[,-1]* 100), solver = "solnp")
+
+# --- WYNIKI ---
+print(fit) # Wy�wietla oszacowania GARCH (Etap 1) i DCC (Etap 2)
+```
+
+
+```{r GARCH_MGARCH}
+plot(fit, which = 4, main = "")
+
+```
+

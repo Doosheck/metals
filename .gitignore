@@ -56,3 +56,4 @@ dist/
 # Windows system files (usuniecie plikow konfiguracyjnych)
 desktop.ini".Rhistory" 
 ".Rhistory" 
+".Rproj.user/" 
