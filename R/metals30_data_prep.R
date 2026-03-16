@@ -603,3 +603,5 @@ p_grid <- ggplot(df_long, aes(x = Date, y = Value)) +
 ggsave("R/All_Series_Grid_4x4.png", p_grid, width = 12, height = 10, dpi = 300, bg="white")
 
 print(p_grid)
+
+getwd()
