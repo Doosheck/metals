@@ -383,38 +383,8 @@ library(dplyr)
 library(tidyr)
 library(knitr)
 
-# 1. Count the number of distinct bubble episodes from the filtered rectangles
-bubble_counts <- bubble_rects %>%
-  count(Series, name = "Number_of_Bubbles")
-
-# 2. Calculate total days and bubble days from the master dataset
-summary_table <- tibble(Series = all_price_series) %>%
-  rowwise() %>%
-  mutate(
-    # Total valid (non-NA) observations for the specific metal series
-    Total_Observations = sum(!is.na(df_final_dataset[[Series]])),
-    
-    # Total days flagged as a positive bubble
-    Days_in_Bubble = sum(df_final_dataset[[paste0(Series, "_BD")]] == 1, na.rm = TRUE)
-  ) %>%
-  ungroup() %>%
-  # Merge with the episodes count
-  left_join(bubble_counts, by = "Series") %>%
-  # Fill NA with 0 for series that had absolutely no bubbles
-  mutate(Number_of_Bubbles = replace_na(Number_of_Bubbles, 0))
-
-# 3. Generate and print the LaTeX code
-latex_code <- kable(summary_table, 
-                    format = "latex", 
-                    booktabs = TRUE, # Uses professional \toprule, \midrule, \bottomrule
-                    linesep = "",    # Removes default spacing for a cleaner look
-                    col.names = c("Series", "Total Observations", "Days in Bubble", "Number of Bubbles"),
-                    caption = "Summary of speculative bubble episodes by metal series.",
-                    label = "tab:bubble_summary")
-
-# Print the result to the console so you can copy it directly to Overleaf / LaTeX editor
-print(latex_code)
-
+# 1. Base calculations
+# 1. Base calculations for the metrics
 bubble_counts <- bubble_rects %>%
   count(Series, name = "Number_of_Bubbles")
 
@@ -426,48 +396,60 @@ df_summary <- tibble(Series = all_price_series) %>%
   left_join(bubble_counts, by = "Series") %>%
   mutate(Number_of_Bubbles = replace_na(Number_of_Bubbles, 0))
 
-# 2. Build the LaTeX code as a character vector
-tex_lines <- c(
-  "\\begin{table}[htbp]",
-  "\\centering",
-  "\\caption{Summary of speculative bubble episodes by metal series.}",
-  "\\label{tab:bubble_summary}",
-  "\\begin{tabular}{lcccc}",
-  "\\toprule"
-)
-
-# Split into chunks of 4
-chunks <- split(df_summary, ceiling(seq_len(nrow(df_summary))/4))
-
-for (i in seq_along(chunks)) {
-  chunk <- chunks[[i]]
+# 2. Reshape the dataframe into the exact visual layout (Blocks of 4)
+df_reshaped <- df_summary %>%
+  # Assign each metal to a specific block (row of 4) and a specific column position (1 to 4)
+  mutate(Block = ceiling(row_number() / 4),
+         Col_Pos = (row_number() - 1) %% 4 + 1) %>%
   
-  # Row 1: Headers
-  tex_lines <- c(tex_lines, paste0(" & \\textbf{", paste(chunk$Series, collapse = "} & \\textbf{"), "} \\\\"))
-  tex_lines <- c(tex_lines, "\\cmidrule{2-5}")
+  # Convert all columns to character so we can mix text (Metal Names) and numbers in the final table
+  mutate(across(everything(), as.character)) %>%
   
-  # Row 2 & 3: Data
-  tex_lines <- c(tex_lines, paste0("Days in Bubble & ", paste(chunk$Days_in_Bubble, collapse = " & "), " \\\\"))
-  tex_lines <- c(tex_lines, paste0("Number of Bubbles & ", paste(chunk$Number_of_Bubbles, collapse = " & "), " \\\\"))
+  # Pivot to a long format to stack Series, Days, and Counts vertically
+  pivot_longer(cols = c(Series, Days_in_Bubble, Number_of_Bubbles), 
+               names_to = "Metric", values_to = "Value") %>%
   
-  # Separator
-  if (i < length(chunks)) {
-    tex_lines <- c(tex_lines, "\\midrule")
-  }
-}
+  # Enforce the correct display order: Series Name -> Days -> Number of Bubbles
+  mutate(Metric = factor(Metric, levels = c("Series", "Days_in_Bubble", "Number_of_Bubbles"))) %>%
+  arrange(Block, Metric, Col_Pos) %>%
+  
+  # Pivot back to a wide format, explicitly creating 4 columns
+  pivot_wider(id_cols = c(Block, Metric), names_from = Col_Pos, values_from = Value, names_prefix = "Col_") %>%
+  ungroup() %>%
+  
+  # Prepare clean row labels for publication
+  mutate(Metric = case_when(
+    Metric == "Series" ~ "",  # Leave the metric name blank for the row containing metal names
+    Metric == "Days_in_Bubble" ~ "Days in Bubble",
+    Metric == "Number_of_Bubbles" ~ "Number of Bubbles"
+  )) %>%
+  
+  # Drop the technical 'Block' column, keeping only the final layout
+  select(Metric, Col_1, Col_2, Col_3, Col_4)
 
-# Close the table
-tex_lines <- c(tex_lines, "\\bottomrule", "\\end{tabular}", "\\end{table}")
+# Replace any potential NAs with empty strings (useful if you have e.g., 14 series instead of exactly 16)
+df_reshaped[is.na(df_reshaped)] <- ""
 
-# 3. Save directly to a file
-writeLines(tex_lines, "bubble_table.tex")
+# 3. Generate clean, publication-ready LaTeX code
+kable_output <- kable(df_reshaped, 
+                      format = "latex", 
+                      booktabs = TRUE, 
+                      col.names = NULL, # Hides the default dataframe column names (Col_1, Col_2, etc.)
+                      linesep = c("", "", "\\addlinespace"), # Adds a subtle vertical space between metal blocks
+                      caption = "Summary of speculative bubble episodes.",
+                      label = "tab:bubble_summary")
+
+# Print to console so you can copy and paste directly into Overleaf
+print(kable_output)
+
+write_csv2(df_summary, here("R/results_R", "bubble_summary_excel.csv"))
 
 # --- 5.4. Export Results ---
 
 # Save the dummy variables for the GARCH model
 write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
 
-# Save the plot as a PDF (only if there are active series)
+
 if(length(active_series) > 0) {
   ggsave(here("outputs", "figures", "bubble_tests", "bubbles_detected_only.pdf"), bubble_plot, 
          width = 10, height = 8)

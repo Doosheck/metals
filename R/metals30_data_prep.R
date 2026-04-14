@@ -189,6 +189,8 @@ str(df_daly)
 saveRDS(df_daly, "R/df_daly_raw.rds")
 write.csv2(df_daly, "R/df_daly_raw.csv")
 
+df_daly <- readRDS("R/df_daly_raw.rds")
+
 ##---- Bubble detection:----
 ###---- Procedure for 4 series----
 # 1. Filter and Log-Transform
@@ -243,7 +245,7 @@ df_final_dataset <- bind_cols(df_filtered, as_tibble(dummy_matrix))
 
 # Use a clear name to avoid loading old files
 saveRDS(df_final_dataset, "R/data_R/bubble_results_new_baseline.rds")
-write.csv2(df_final_dataset, "R/data_R/df_final_dataset201711.csv")
+write.csv2(df_final_dataset, "R/data_R/df_final_dataset201711_1.csv")
 sum(df_final_dataset$CUDALY_BD)/nrow(df_final_dataset)
 
 #df_final_dataset <- readRDS("R/data_R/bubble_dummies_df_daly.rds")
