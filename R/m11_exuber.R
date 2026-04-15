@@ -171,6 +171,15 @@ if (file.exists(mc_cv)) {
   saveRDS(mc_cv, mc_cv)
   message("Computed and saved mc_cv.")
 }
+<<<<<<< HEAD
+=======
+
+# mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
+# mc_cv
+# saveRDS(mc_cv, here("outputs", "R_objects", "mc_cv.rds"))
+# for the next time:
+# mc_cv <- readRDS(here("outputs", "R_objects", "mc_cv.rds"))
+>>>>>>> 21b74d079ee0ce85e1e9b8933878e092693a90a8
 
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
@@ -269,7 +278,11 @@ plot_bubbles <- function(df_dataset, rects, title = "") {
     facet_wrap(~ Series, scales = "free_y", ncol = 4) +
     theme_minimal() +
     theme(
+<<<<<<< HEAD
       strip.text       = element_text(face = "plain", size = 12), #plot label
+=======
+      strip.text       = element_text(face = "plain", size = 9),
+>>>>>>> 21b74d079ee0ce85e1e9b8933878e092693a90a8
       panel.grid.minor = element_blank(),
       axis.text        = element_text(size = 7),
       axis.text.x      = element_text(angle = 45, hjust = 1)
@@ -399,10 +412,13 @@ make_bubble_table(
   csv_path   = here("R/results_R", "bubble_summary_updown.csv")
 )
 
+<<<<<<< HEAD
 
 # ---- 7 Descriptive stats ----
 
 
+=======
+>>>>>>> 21b74d079ee0ce85e1e9b8933878e092693a90a8
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---
 
