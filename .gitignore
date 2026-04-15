@@ -33,7 +33,7 @@ dist/
 ~$*.xlsx
 *.bak
 .Rproj.user
-.R.history
+.Rhistory
 .RData
 .lintr
 
