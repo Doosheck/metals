@@ -172,6 +172,7 @@ if (file.exists(mc_cv)) {
   message("Computed and saved mc_cv.")
 }
 
+
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
 summary(est_results, cv = mc_cv)
@@ -400,7 +401,9 @@ make_bubble_table(
 )
 
 
+
 # ---- 7 Descriptive stats ----
+
 
 
 # ---- OLD code ----
