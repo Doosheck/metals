@@ -9,70 +9,70 @@ library(kableExtra)
 
 
 #---- Single metal example ----
-
-
-# --- 1. Filter Cobalt Series ---
-df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
-  show_col_types = FALSE, 
-  guess_max = 10000)
-
-# Adjust the pattern "CO" to match your specific Cobalt column names
-cobalt_data <- df_final %>%
-  dplyr::select(CODALY, COLMEX, COLMEA, COWUXI) %>% 
-  mutate(across(everything(), ~ log(.x))) %>%
-  as.matrix()
-
-head(cobalt_data)
-dim(cobalt_data)
-
-df_dummies <- read_csv(here("data", "bubble_dummies.csv"), 
-                     show_col_types = FALSE, 
-                     guess_max = 10000) 
-# Prepare the Dummy Matrix 
-cobalt_dummies <- df_dummies %>%
-  dplyr::select(CODALY, COLMEX, COLMEA, COWUXI) %>%
-  rename_with(~ paste0(.x, "_DV")) %>%
-  # Ensure no rows have NA values
-  drop_na() %>%
-  as.matrix()
-
-head(cobalt_dummies)
-dim(cobalt_dummies)
-
-# --- 2. Lag Selection ---
-# Cointegration tests are highly sensitive to the lag structure
-# We include the dummies in the lag selection to ensure the optimal lag 
-# isn't being skewed by the bubble variance.
-
-cobalt_lags <- VARselect(cobalt_data, lag.max = 10, type = "const")
-best_lag <- cobalt_lags$selection["AIC(n)"]
-
-cobalt_lags_ex <- VARselect(cobalt_data, 
-                         lag.max = 10, 
-                         type = "const", 
-                         exogen = cobalt_dummies)
-
-best_lag_ex <- cobalt_lags$selection["AIC(n)"]
-# no exogenous variables
-
-best_lag
-
-# --- 3. Johansen Test (Trace) ---
-# K is the number of lags. ecdet="const" allows for a drift in the price levels
-
-jo_cobalt <- ca.jo(cobalt_data, 
-                   type = "trace", 
-                   ecdet = "const", 
-                   K = best_lag)
-
-jo_cobalt_ex <- ca.jo(cobalt_data, 
-                   type = "trace", 
-                   ecdet = "const", 
-                   K = best_lag,
-                   dumvar = cobalt_dummies)
-# --- 4. Interpretation ---
-summary(jo_cobalt)
-summary(jo_cobalt_ex)
+# 
+# 
+# # --- 1. Filter Cobalt Series ---
+# df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
+#   show_col_types = FALSE, 
+#   guess_max = 10000)
+# 
+# # Adjust the pattern "CO" to match your specific Cobalt column names
+# cobalt_data <- df_final %>%
+#   dplyr::select(CODALY, COLMEX, COLMEA, COWUXI) %>% 
+#   mutate(across(everything(), ~ log(.x))) %>%
+#   as.matrix()
+# 
+# head(cobalt_data)
+# dim(cobalt_data)
+# 
+# df_dummies <- read_csv(here("data", "bubble_dummies.csv"), 
+#                      show_col_types = FALSE, 
+#                      guess_max = 10000) 
+# # Prepare the Dummy Matrix 
+# cobalt_dummies <- df_dummies %>%
+#   dplyr::select(CODALY, COLMEX, COLMEA, COWUXI) %>%
+#   rename_with(~ paste0(.x, "_DV")) %>%
+#   # Ensure no rows have NA values
+#   drop_na() %>%
+#   as.matrix()
+# 
+# head(cobalt_dummies)
+# dim(cobalt_dummies)
+# 
+# # --- 2. Lag Selection ---
+# # Cointegration tests are highly sensitive to the lag structure
+# # We include the dummies in the lag selection to ensure the optimal lag 
+# # isn't being skewed by the bubble variance.
+# 
+# cobalt_lags <- VARselect(cobalt_data, lag.max = 10, type = "const")
+# best_lag <- cobalt_lags$selection["AIC(n)"]
+# 
+# cobalt_lags_ex <- VARselect(cobalt_data, 
+#                          lag.max = 10, 
+#                          type = "const", 
+#                          exogen = cobalt_dummies)
+# 
+# best_lag_ex <- cobalt_lags$selection["AIC(n)"]
+# # no exogenous variables
+# 
+# best_lag
+# 
+# # --- 3. Johansen Test (Trace) ---
+# # K is the number of lags. ecdet="const" allows for a drift in the price levels
+# 
+# jo_cobalt <- ca.jo(cobalt_data, 
+#                    type = "trace", 
+#                    ecdet = "const", 
+#                    K = best_lag)
+# 
+# jo_cobalt_ex <- ca.jo(cobalt_data, 
+#                    type = "trace", 
+#                    ecdet = "const", 
+#                    K = best_lag,
+#                    dumvar = cobalt_dummies)
+# # --- 4. Interpretation ---
+# summary(jo_cobalt)
+# summary(jo_cobalt_ex)
 
 #---- Four metals and function Sonet 4.5----
 
@@ -83,13 +83,17 @@ library(tidyverse)
 library(kableExtra)
 
 # --- Read Data Once ---
-df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
-                     show_col_types = FALSE, 
-                     guess_max = 10000)
+# df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
+#                      show_col_types = FALSE, 
+#                      guess_max = 10000)
+# 
+# df_dummies <- read_csv(here("data", "bubble_dummies.csv"), 
+#                        show_col_types = FALSE, 
+#                        guess_max = 10000)
 
-df_dummies <- read_csv(here("data", "bubble_dummies.csv"), 
-                       show_col_types = FALSE, 
-                       guess_max = 10000)
+#file with df_final_dataset_up: "R/results_R", "series_and_bubble_up_down.csv")
+df_final <- df_final_dataset_up[1:17]
+df_dummies <- df_final_dataset_up[c(1, 18:33)]
 
 # --- Function to Run Analysis ---
 run_metal_analysis <- function(metal_name, columns) {
@@ -106,8 +110,8 @@ run_metal_analysis <- function(metal_name, columns) {
     
     # Prepare Dummy Matrix
     metal_dummies <- df_dummies %>%
-      dplyr::select(all_of(columns)) %>%
-      rename_with(~ paste0(.x, "_DV")) %>%
+      dplyr::select(all_of(paste0(columns, "_BD"))) %>%
+      rename_with(~ paste0(str_remove(.x, "_BD$"), "_DV")) %>%
       drop_na() %>%
       as.matrix()
     
@@ -263,10 +267,10 @@ run_metal_analysis <- function(metal_name, columns) {
 
 # --- Metal Configurations ---
 metal_configs <- list(
-  "Cobalt" = c("CODALY", "COLMEX", "COLMEA", "COWUXI"),
-  "Copper" = c("CUDALY", "CUCOMX", "CULMEX", "CUSMMG", "CUSHFE"), 
-  "Lithium" = c("LIDALY", "LISAME", "LICOMX", "LILMEX"),
-  "Nickel" = c("NIDALY", "NILMEX", "NISHFE", "NIWUXI", "NIINDA")
+  "Cobalt" = c("COCOMX", "CODALY", "COLMEX", "COWUXI"),
+  "Copper" = c( "CUCOMX", "CUDALY", "CULMEX", "CUSHFE"), 
+  "Lithium" = c("LICOMX", "LIDALY", "LILMEX", "LISAME"),
+  "Nickel" = c("NIDALY", "NILMEX", "NISHFE", "NIWUXI")
 )
 
 # --- Run Analysis for All Metals ---
@@ -298,35 +302,45 @@ for (metal in names(all_results)) {
 # summary(all_results$Cobalt$jo_basic)
 # summary(all_results$Copper$jo_ex)
 
-simple_latex <- latex_table_data %>%
-  kbl(format = "latex",
-      booktabs = TRUE,
-      escape = FALSE,
-      caption = "Johansen Cointegration Tests and Price Discovery",
-      label = "tab:johansen_results")
-cat(simple_latex)
+# simple_latex <- latex_table_data %>%
+#   kbl(format = "latex",
+#       booktabs = TRUE,
+#       escape = FALSE,
+#       caption = "Johansen Cointegration Tests and Price Discovery",
+#       label = "tab:johansen_results")
+# cat(simple_latex)
 
 ##--- Function to Extract Full Results Including All Trace Stats ----
 extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
-
+  
   if (is.null(jo_obj)) {
     return(NULL)
   }
-
+  
   # Extract trace statistics and critical values
   trace_stats <- jo_obj@teststat
-  crit_vals_10 <- jo_obj@cval[, 3]  # 10%
+  n_tests <- length(trace_stats) 
+  
+  crit_vals_10 <- jo_obj@cval[, 1]  # 10%
   crit_vals_5 <- jo_obj@cval[, 2]   # 5%
-  crit_vals_1 <- jo_obj@cval[, 1]   # 1%
-
-  r <- sum(trace_stats > crit_vals_5)
-
+  crit_vals_1 <- jo_obj@cval[, 3]   # 1%
+  
+  # Prawid�owy, sekwencyjny test Johansena
+  r <- 0
+  for (i in n_tests:1) {
+    if (trace_stats[i] > crit_vals_5[i]) {
+      r <- r + 1
+    } else {
+      break 
+    }
+  }
+  
   # Safe rank for VECM estimation
   safe_r <- max(1, min(r, ncol(price_data) - 1))
-
+  
   # Estimate VECM to get alpha (adjustment speeds)
   vecm <- cajorls(jo_obj, r = safe_r)
-
+  
   # Extract alpha values
   if (is.matrix(vecm$rlm$coefficients)) {
     alpha_vals <- vecm$rlm$coefficients[grep("^ect", rownames(vecm$rlm$coefficients)), ]
@@ -336,20 +350,20 @@ extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
   } else {
     alpha_vals <- vecm$rlm$coefficients[grep("^ect", names(vecm$rlm$coefficients))]
   }
-
+  
   # Get exchange names
   exchange_names <- colnames(price_data)
-
+  
   # Find leader and follower
   abs_alphas <- abs(alpha_vals)
   leader_idx <- which.min(abs_alphas)
   follower_idx <- which.max(abs_alphas)
-
+  
   leader_name <- exchange_names[leader_idx]
   follower_name <- exchange_names[follower_idx]
   leader_alpha <- alpha_vals[leader_idx]
   follower_alpha <- alpha_vals[follower_idx]
-
+  
   # Function to add significance stars
   add_stars <- function(stat, crit_10, crit_5, crit_1) {
     if (stat > crit_1) return(paste0(sprintf("%.2f", stat), "***"))
@@ -357,42 +371,174 @@ extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
     if (stat > crit_10) return(paste0(sprintf("%.2f", stat), "*"))
     return(sprintf("%.2f", stat))
   }
-
-  # Format all trace statistics
-  n_tests <- length(trace_stats)
+  
+  # Format all trace statistics (LOGIKA UCI�CIA)
   trace_formatted <- character(n_tests)
-
+  
   for (i in 1:n_tests) {
-    trace_formatted[i] <- add_stars(trace_stats[n_tests - i + 1],
-                                    crit_vals_10[n_tests - i + 1],
-                                    crit_vals_5[n_tests - i + 1],
-                                    crit_vals_1[n_tests - i + 1])
+    # Pokazujemy tylko kroki odrzucone (i <= r) oraz ten zatrzymuj�cy (i == r + 1)
+    if (i <= r + 1) {
+      trace_formatted[i] <- add_stars(trace_stats[n_tests - i + 1],
+                                      crit_vals_10[n_tests - i + 1],
+                                      crit_vals_5[n_tests - i + 1],
+                                      crit_vals_1[n_tests - i + 1])
+    } else {
+      # Dla reszty wstawiamy puste miejsce
+      trace_formatted[i] <- "" 
+    }
   }
-
+  
   # Create result tibble with all trace stats
   result <- tibble(
     Metal = metal_name,
     Model = model_name,
     Rank = r
   )
-
+  
   # Add trace columns dynamically based on number of series
   for (i in 0:(n_tests - 1)) {
-    col_name <- if (i == 0) "r=0" else paste0("r≤", i)
+    col_name <- if (i == 0) "r=0" else paste0("r???", i)
     result[[col_name]] <- trace_formatted[i + 1]
   }
-
+  
   # Add alpha values WITHOUT exchange names inline
-  result$`Max α` <- sprintf("%.3f", follower_alpha)
+  result$`Max ??` <- sprintf("%.3f", follower_alpha)
   result$Follower <- follower_name
-  result$`Min α` <- sprintf("%.3f", leader_alpha)
+  result$`Min ??` <- sprintf("%.3f", leader_alpha)
   result$Leader <- leader_name
+  
+  result
+}
 
+#extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
+  
+  if (is.null(jo_obj)) {
+    return(NULL)
+  }
+  
+  # Extract trace statistics and critical values
+  trace_stats <- jo_obj@teststat
+  n_tests <- length(trace_stats) # <--- PRZENIESIONE TUTAJ! Teraz R wie, ile jest test�w.
+  
+  crit_vals_10 <- jo_obj@cval[, 1]  # 10%
+  crit_vals_5 <- jo_obj@cval[, 2]   # 5%
+  crit_vals_1 <- jo_obj@cval[, 3]   # 1%
+  
+  # Prawid�owy, sekwencyjny test Johansena
+  r <- 0
+  for (i in n_tests:1) {
+    if (trace_stats[i] > crit_vals_5[i]) {
+      r <- r + 1
+    } else {
+      break 
+    }
+  }
+  
+  # Safe rank for VECM estimation
+  safe_r <- max(1, min(r, ncol(price_data) - 1))
+  
+  # Estimate VECM to get alpha (adjustment speeds)
+  vecm <- cajorls(jo_obj, r = safe_r)
+  
+  # Extract alpha values
+  if (is.matrix(vecm$rlm$coefficients)) {
+    alpha_vals <- vecm$rlm$coefficients[grep("^ect", rownames(vecm$rlm$coefficients)), ]
+    if (is.matrix(alpha_vals)) {
+      alpha_vals <- alpha_vals[, 1]
+    }
+  } else {
+    alpha_vals <- vecm$rlm$coefficients[grep("^ect", names(vecm$rlm$coefficients))]
+  }
+  
+  # Get exchange names
+  exchange_names <- colnames(price_data)
+  
+  # Find leader and follower
+  abs_alphas <- abs(alpha_vals)
+  leader_idx <- which.min(abs_alphas)
+  follower_idx <- which.max(abs_alphas)
+  
+  leader_name <- exchange_names[leader_idx]
+  follower_name <- exchange_names[follower_idx]
+  leader_alpha <- alpha_vals[leader_idx]
+  follower_alpha <- alpha_vals[follower_idx]
+  
+  # Function to add significance stars
+  add_stars <- function(stat, crit_10, crit_5, crit_1) {
+    if (stat > crit_1) return(paste0(sprintf("%.2f", stat), "***"))
+    if (stat > crit_5) return(paste0(sprintf("%.2f", stat), "**"))
+    if (stat > crit_10) return(paste0(sprintf("%.2f", stat), "*"))
+    return(sprintf("%.2f", stat))
+  }
+  
+  # Format all trace statistics
+  trace_formatted <- character(n_tests)
+  
+  for (i in 1:n_tests) {
+    trace_formatted[i] <- add_stars(trace_stats[n_tests - i + 1],
+                                    crit_vals_10[n_tests - i + 1],
+                                    crit_vals_5[n_tests - i + 1],
+                                    crit_vals_1[n_tests - i + 1])
+  }
+  
+  # Create result tibble with all trace stats
+  result <- tibble(
+    Metal = metal_name,
+    Model = model_name,
+    Rank = r
+  )
+  
+  # Add trace columns dynamically based on number of series
+  for (i in 0:(n_tests - 1)) {
+    col_name <- if (i == 0) "r=0" else paste0("r???", i)
+    result[[col_name]] <- trace_formatted[i + 1]
+  }
+  
+  # Add alpha values WITHOUT exchange names inline
+  result$`Max ??` <- sprintf("%.3f", follower_alpha)
+  result$Follower <- follower_name
+  result$`Min ??` <- sprintf("%.3f", leader_alpha)
+  result$Leader <- leader_name
+  
   result
 }
 # 
 # # --- Extract Results for All Metals ---
-latex_table_data <- map_dfr(names(all_results), function(metal) {
+library(dplyr)
+library(purrr)
+
+# 1. Extract all results for RAW models
+raw_data <- map_dfr(names(all_results), function(metal) {
+  res <- all_results[[metal]]
+  
+  extract_full_results(
+    metal_name = toupper(metal),
+    jo_obj = res$jo_basic,
+    model_name = "Raw",
+    price_data = res$data
+  )
+})
+
+# 2. Extract all results for FILTERED models
+filtered_data <- map_dfr(names(all_results), function(metal) {
+  res <- all_results[[metal]]
+  
+  if (!is.null(res$jo_ex)) {
+    extract_full_results(
+      metal_name = toupper(metal), # <-- Restoring the metal name for clarity!
+      jo_obj = res$jo_ex,
+      model_name = "Filtered",
+      price_data = res$data
+    )
+  } else {
+    NULL # Skip if the given metal had no bubbles and lacks an exogenous model
+  }
+})
+
+# 3. Combine both blocks into one final table (Raw first, then Filtered)
+latex_table_data <- bind_rows(raw_data, filtered_data)
+
+#latex_table_data <- map_dfr(names(all_results), function(metal) {
 
   res <- all_results[[metal]]
 
@@ -423,17 +569,78 @@ print(latex_table_data)
 
 #----Gemini 2 ----
 
+# trace_cols <- names(latex_table_data)[grepl("^r", names(latex_table_data))]
+# 
+# # --- main rows---
+# main_rows <- latex_table_data %>%
+#   mutate(
+#     Metal = ifelse(Metal == "", Model, Metal),
+#     # Główne wartości Alpha
+#     Follower_Disp = sprintf("%.3f", as.numeric(`Max α`)),
+#     Leader_Disp = sprintf("%.3f", as.numeric(`Min α`))
+#   ) %>%
+#   # Wybieramy kolumny w konkretnej kolejności
+#   dplyr::select(Metal, Rank, all_of(trace_cols), Follower_Disp, Leader_Disp) %>%
+#   mutate(across(everything(), as.character))
+# 
+# # --- proxy rows ---
+# name_rows <- latex_table_data %>%
+#   mutate(
+#     Metal = "",
+#     Rank = "",
+#     Follower_Disp = Follower,
+#     Leader_Disp = Leader
+#   ) %>%
+#   mutate(across(all_of(trace_cols), ~ "")) %>% #fill empty cols with ""
+#   dplyr::select(Metal, Rank, all_of(trace_cols), Follower_Disp, Leader_Disp) %>%
+#   mutate(across(everything(), as.character))
+# 
+# # --- mix of rows ---
+# final_table <- map_dfr(1:nrow(main_rows), ~ {
+#   bind_rows(main_rows[.x, ], name_rows[.x, ])
+# })
+# 
+# trace_cols_names <- names(final_table)[grepl("^r", names(final_table))]
+# 
+# latex_output_final <- final_table %>%
+#   kbl(format = "latex",
+#       booktabs = TRUE,
+#       escape = FALSE,
+#       align = c("l", "c", rep("c", length(trace_cols_names)), "c", "c"),
+#       # rename cols:
+#       col.names = c("Metal", "$r$", trace_cols_names, "Follower", "Leader"),
+#       linesep = c("", "\\addlinespace"), 
+#       caption = "Johansen Cointegration Tests and Price Discovery",
+#       label = "tab:johansen") %>% 
+#   kable_styling(latex_options = c("hold_position"), font_size = 10) %>%
+#   column_spec(1, bold = TRUE, width = "2.5cm") %>%
+#   # dynamic width of two last cols (Follower/Leader)
+#   column_spec((ncol(final_table)-1):ncol(final_table), width = "2.2cm") %>%
+#   add_header_above(c(" " = 2, 
+#                    "Trace Statistics" = length(trace_cols_names), 
+#                    "Max $|\\alpha|$" = 1, 
+#                    "Min $|\\alpha|$" = 1))
+# 
+# 
+# cat(latex_output_final)
+
+#---- Gemini3 ----
+#kod do tabeli
 trace_cols <- names(latex_table_data)[grepl("^r", names(latex_table_data))]
 
-# --- main rows---
+col_max_alpha <- grep("Max", names(latex_table_data), value = TRUE)
+col_min_alpha <- grep("Min", names(latex_table_data), value = TRUE)
+
+# --- main rows ---
 main_rows <- latex_table_data %>%
   mutate(
-    Metal = ifelse(Metal == "", Model, Metal),
-    # Główne wartości Alpha
-    Follower_Disp = sprintf("%.3f", as.numeric(`Max α`)),
-    Leader_Disp = sprintf("%.3f", as.numeric(`Min α`))
+    Metal = case_when(
+      Model == "Filtered" ~ paste0(Metal, "\\_F"),
+      TRUE ~ Metal
+    ),
+    Follower_Disp = sprintf("%.3f", as.numeric(.data[[col_max_alpha]])),
+    Leader_Disp = sprintf("%.3f", as.numeric(.data[[col_min_alpha]]))
   ) %>%
-  # Wybieramy kolumny w konkretnej kolejności
   dplyr::select(Metal, Rank, all_of(trace_cols), Follower_Disp, Leader_Disp) %>%
   mutate(across(everything(), as.character))
 
@@ -445,7 +652,7 @@ name_rows <- latex_table_data %>%
     Follower_Disp = Follower,
     Leader_Disp = Leader
   ) %>%
-  mutate(across(all_of(trace_cols), ~ "")) %>% #fill empty cols with ""
+  mutate(across(all_of(trace_cols), ~ "")) %>% 
   dplyr::select(Metal, Rank, all_of(trace_cols), Follower_Disp, Leader_Disp) %>%
   mutate(across(everything(), as.character))
 
@@ -456,25 +663,29 @@ final_table <- map_dfr(1:nrow(main_rows), ~ {
 
 trace_cols_names <- names(final_table)[grepl("^r", names(final_table))]
 
+n_raw <- sum(latex_table_data$Model == "Raw") * 2
+n_filtered <- sum(latex_table_data$Model == "Filtered") * 2
+
+# --- Final LaTeX table ---
 latex_output_final <- final_table %>%
   kbl(format = "latex",
       booktabs = TRUE,
       escape = FALSE,
       align = c("l", "c", rep("c", length(trace_cols_names)), "c", "c"),
-      # rename cols:
       col.names = c("Metal", "$r$", trace_cols_names, "Follower", "Leader"),
-      linesep = c("", "\\addlinespace"), 
-      caption = "Johansen Cointegration Tests and Price Discovery",
+      #linesep = c("", "\\addlinespace"), # Genialny trik na spacj� co dwa wiersze
+      caption = "Results of the Johansen Cointegration Tests",
       label = "tab:johansen") %>% 
   kable_styling(latex_options = c("hold_position"), font_size = 10) %>%
   column_spec(1, bold = TRUE, width = "2.5cm") %>%
-  # dynamic width of two last cols (Follower/Leader)
   column_spec((ncol(final_table)-1):ncol(final_table), width = "2.2cm") %>%
   add_header_above(c(" " = 2, 
-                   "Trace Statistics" = length(trace_cols_names), 
-                   "Max $|\\alpha|$" = 1, 
-                   "Min $|\\alpha|$" = 1))
+                     "Trace Statistics" = length(trace_cols_names), 
+                     "Max $\\alpha$" = 1, 
+                     "Min $\\alpha$" = 1), escape = FALSE) %>%
+  pack_rows("Raw series", 1, n_raw, bold = TRUE, escape = FALSE, indent = FALSE) %>%
+  pack_rows("Filtered", n_raw + 1, n_raw + n_filtered, bold = TRUE, escape = FALSE, indent = FALSE)
 
 
 cat(latex_output_final)
-writeLines(latex_output_final, here(\"outputs\", \"tables\", \"johansen_results_final.tex\"))
+
