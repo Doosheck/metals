@@ -6,8 +6,8 @@ install.packages("here")
 library(tidyverse)
 library(exuber)
 library(visdat)
-library(here) # Critical for OneDrive/Project relative paths
-
+library(here)# Critical for OneDrive/Project relative paths
+library(kableExtra)
 
 # --- 2. Data Loading ---
 # Using here() to ensure paths work across different machines/OneDrive syncs
@@ -29,51 +29,21 @@ df_CO <- read_csv(here("data/ALL_cobalt_prices_cubic_spline.csv"),
 
 # --- Visual Inspection ---
 # Look at these plots to see where the gaps (NA values) are
-vis_dat(df_NI) + labs(title = "Nickel")
-vis_dat(df_CU) + labs(title = "Copper")
-vis_dat(df_LI) + labs(title = "Lithium")
-vis_dat(df_CO) + labs(title = "Cobalt")
+# vis_dat(df_NI) + labs(title = "Nickel")
+# vis_dat(df_CU) + labs(title = "Copper")
+# vis_dat(df_LI) + labs(title = "Lithium")
+# vis_dat(df_CO) + labs(title = "Cobalt")
 
 
 
 # --- 2.1. Cleaning Individual Series ---
 
-# # Nickel: Remove problematic columns and NA rows
-# df_NI_clean <- df_NI %>%
-#   select(Date, everything(), -any_of(c("NIETFN"))) %>%
-#   mutate(Date = as.Date(Date)) %>%
-#   na.omit()
-# 
-# # Copper: Remove ETFC column
-# df_CU_clean <- df_CU %>%
-#   select(Date, everything(), -any_of(c("CUETFC"))) %>%
-#   mutate(Date = as.Date(Date)) %>%
-#   na.omit()
-# 
-# # Lithium: Remove multiple columns
-# df_LI_clean <- df_LI %>%
-#   select(Date, everything(), -any_of(c("LILAMC", "LIEALC", "LIEABG"))) %>%
-#   mutate(Date = as.Date(Date)) %>%
-#   na.omit()
-# 
-# # Cobalt: Remove specific columns
-# df_CO_clean <- df_CO %>%
-#   select(Date, everything(), -any_of(c("COSMMS", "COCOMX"))) %>%
-#   mutate(Date = as.Date(Date)) %>%
-#   na.omit()
-
 # --- 2.2. Selection ---
 # Set the metals you want to include based on your vis_dat results.
-# Simply remove a name from this vector to exclude it (e.g., c("NI", "CU", "CO"))
 
 target_metals <- c("NI", "CU", "LI", "CO")
 
 # --- 2.3. Synchronizing Overlapping Dates ---
-
-# Define your target start and end date
-# Required End: Drops series that end too early (e.g., Dec 2024)
-# Required Start: Drops series that start too late (e.g., July 2021)
-
 # Define your target window
 
 required_end_date   <- as.Date("2025-07-21")
@@ -84,7 +54,7 @@ drop_map <- list(
   NI = c("NIETFN", "NIINDA"),
   CU = c("CUETFC", "CUSMMG"),
   LI = c("LILAMC", "LIEALC", "LIEABG"),
-  CO = c("COSMMS", "COCOMX")
+  CO = c("COSMMS", "COLMEA")
 )
 
 # --- 2.3. Cleaning & Synchronization Pipeline ---
@@ -148,7 +118,7 @@ message("Total columns in df_final: ", ncol(df_final) - 1)
 
 # # --- 2.5a Save the Combined File ---
 # # This saves the synchronized 'df_final' containing all selected metals
-write_csv(df_final, here("data", "combined_metals_cleaned2.csv"))
+# write_csv(df_final, here("data", "combined_metals_cleaned2.csv"))
 # message("Saved combined file: combined_metals_cleaned2.csv")
 
 df_plot <- df_final %>%
@@ -181,7 +151,6 @@ data_matrix <- df_final %>%
 rownames(data_matrix) <- as.character(df_final$Date)
 
 # --- 4.2. Run RADF Estimation ---
-# This calculates SADF and GSADF statistics for all series in the matrix.
 # Note: This might take a moment depending on the number of series.
 est_results <- radf(data_matrix)
 
@@ -191,23 +160,254 @@ est_results <- radf(data_matrix)
 
 # for the first time calculate and save
 n_obs <- nrow(data_matrix)
-mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
-mc_cv
-saveRDS(mc_cv, here("outputs", "R_objects", "mc_cv.rds"))
-# for the next time:
-mc_cv <- readRDS(here("outputs", "R_objects", "mc_cv.rds"))
+
+mc_cv <- here("outputs", "R_objects", "mc_cv.rds")
+
+if (file.exists(mc_cv)) {
+  mc_cv <- readRDS(mc_cv)
+  message("Loaded mc_cv from cache.")
+} else {
+  mc_cv <- radf_mc_cv(n = nrow(data_matrix), seed = 123)
+  saveRDS(mc_cv, mc_cv)
+  message("Computed and saved mc_cv.")
+}
 
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
 summary(est_results, cv = mc_cv)
 
 
-#---- Bubbles plots and DV ----
+# ---- 5. Bubble Dummies & Plots Claude ----
 
+# --- 5.0 Compute datestamp ONCE ---
+bubble_dates_raw <- datestamp(est_results, cv = mc_cv)
+
+# --- 5.1 Helper: OLS trend direction ---
+is_positive_trend <- function(start_idx, end_idx, prices) {
+  p <- prices[start_idx:end_idx]
+  if (length(p) > 2) coef(lm(p ~ seq_along(p)))[2] > 0 else tail(p, 1) > head(p, 1)
+}
+
+# --- 5.2 Reusable dummy-builder ---
+# upward_only = FALSE  › marks ALL explosive episodes (up + down)
+# upward_only = TRUE   › marks only episodes with a positive OLS trend
+build_bubble_dummies <- function(bubble_dates, df_prices, upward_only = FALSE) {
+  series_names <- names(df_prices)[-1]
+  
+  map_dfc(series_names, function(series) {
+    vec    <- rep(0L, nrow(df_prices))
+    periods <- bubble_dates[[series]]
+    
+    if (!is.null(periods) && nrow(periods) > 0) {
+      prices <- as.numeric(df_prices[[series]])
+      
+      for (i in seq_len(nrow(periods))) {
+        s <- periods[i, "Start"]
+        e <- periods[i, "End"]
+        
+        # Apply direction filter only when requested
+        if (!upward_only || is_positive_trend(s, e, prices)) {
+          vec[s:e] <- 1L
+        }
+      }
+    }
+    tibble(!!paste0(series, "_BD") := vec)
+  })
+}
+
+# --- 5.3 Build both versions ---
+df_final_dataset_updown <- bind_cols(df_final, build_bubble_dummies(bubble_dates_raw, df_final, upward_only = FALSE))
+df_final_dataset_up     <- bind_cols(df_final, build_bubble_dummies(bubble_dates_raw, df_final, upward_only = TRUE))
+
+write_csv2(df_final_dataset_updown, here("R/results_R", "series_and_bubble_up_down.csv"))
+write_csv2(df_final_dataset_up,     here("R/results_R", "series_and_bubble_up.csv"))
+
+# --- 5.4 Filter bubble_dates for plotting (upward only) ---
+bubble_dates_filtered <- imap(bubble_dates_raw, ~ {
+  if (is.null(.x) || nrow(.x) == 0) return(NULL)
+  prices <- as.numeric(df_final[[.y]])
+  keep   <- apply(.x, 1, function(row) is_positive_trend(row["Start"], row["End"], prices))
+  .x[keep, , drop = FALSE]
+}) %>% compact()
+
+# --- 5.5 Plotting rectangles ---
+bubble_rects <- imap_dfr(bubble_dates_filtered, ~ tibble(
+  Series = .y,
+  xmin   = df_final$Date[.x[, "Start"]],
+  xmax   = df_final$Date[.x[, "End"]],
+  ymin   = -Inf,
+  ymax   =  Inf
+))
+
+# --- 5.6 Plot Factory ---
+# Reusable function so you can call it for either dataset/rect combination
+
+plot_bubbles <- function(df_dataset, rects, title = "") {
+  
+  # 1. Identify price series (strip Date and _BD dummies)
+  price_series <- names(df_dataset)[
+    !names(df_dataset) %in% "Date" & !grepl("_BD$", names(df_dataset))
+  ]
+  
+  # 2. Long format for price lines
+  df_plot_long <- df_dataset %>%
+    select(Date, all_of(price_series)) %>%
+    pivot_longer(-Date, names_to = "Series", values_to = "Price")
+  
+  # 3. Build plot
+  p <- ggplot() +
+    # Shaded bubble periods
+    {if (nrow(rects) > 0)
+      geom_rect(data = rects,
+                aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+                fill = "grey70", alpha = 0.5)
+    } +
+    # Price lines
+    geom_line(data = df_plot_long,
+              aes(x = Date, y = Price),
+              color = "black", linewidth = 0.5) +
+    facet_wrap(~ Series, scales = "free_y", ncol = 4) +
+    theme_minimal() +
+    theme(
+      strip.text       = element_text(face = "plain", size = 12), #plot label
+      panel.grid.minor = element_blank(),
+      axis.text        = element_text(size = 7),
+      axis.text.x      = element_text(angle = 45, hjust = 1)
+    ) +
+    labs(title = title, x = NULL, y = NULL)
+  
+  p
+}
+
+# --- 5.7 Generate & Save Both Versions ---
+
+# Upward-only bubbles (rects already filtered to upward in 5.4)
+plot_up <- plot_bubbles(df_final_dataset_up, bubble_rects, title = "")
+
+# All bubbles — need a separate rect table built from the UNFILTERED dates
+bubble_rects_all <- imap_dfr(bubble_dates_raw, ~ {
+  if (is.null(.x) || nrow(.x) == 0) return(tibble())
+  tibble(
+    Series = .y,
+    xmin   = df_final$Date[.x[, "Start"]],
+    xmax   = df_final$Date[.x[, "End"]],
+    ymin   = -Inf,
+    ymax   =  Inf
+  )
+})
+
+plot_updown <- plot_bubbles(df_final_dataset_updown, bubble_rects_all, title = "")
+
+# Save — explicit width/height avoids 16-panel crowding
+ggsave(here("graphsR", "bubbles_up_only.pdf"),    plot_up,     width = 14, height = 10)
+ggsave(here("graphsR", "bubbles_up_and_down.pdf"), plot_updown, width = 14, height = 10)
+
+
+# ---- 6. Table Factory ----
+
+make_bubble_table <- function(df_dataset, rects, 
+                              caption = "Summary of speculative bubble episodes.",
+                              label   = "tab:bubble_summary",
+                              csv_path = NULL) {
+  
+  # 1. Derive price series from the dataset (same logic as plot factory)
+  price_series <- names(df_dataset)[
+    !names(df_dataset) %in% "Date" & !grepl("_BD$", names(df_dataset))
+  ]
+  
+  # 2. Base calculations
+  bubble_counts <- rects %>%
+    count(Series, name = "Number_of_Bubbles")
+  
+  df_summary <- tibble(Series = price_series) %>%
+    arrange(Series) %>%
+    rowwise() %>%
+    mutate(Days_in_Bubble = sum(df_dataset[[paste0(Series, "_BD")]] == 1, na.rm = TRUE)) %>%
+    ungroup() %>%
+    left_join(bubble_counts, by = "Series") %>%
+    mutate(Number_of_Bubbles = replace_na(Number_of_Bubbles, 0))
+  
+  # 3. Reshape into publication layout (blocks of 4)
+  n_series <- nrow(df_summary)
+  
+  df_reshaped <- df_summary %>%
+    mutate(Block   = ceiling(row_number() / 4),
+           Col_Pos = (row_number() - 1) %% 4 + 1) %>%
+    mutate(across(everything(), as.character)) %>%
+    pivot_longer(cols      = c(Series, Days_in_Bubble, Number_of_Bubbles),
+                 names_to  = "Metric",
+                 values_to = "Value") %>%
+    mutate(Metric = factor(Metric,
+                           levels = c("Series", "Days_in_Bubble", "Number_of_Bubbles"))) %>%
+    arrange(Block, Metric, Col_Pos) %>%
+    pivot_wider(id_cols     = c(Block, Metric),
+                names_from  = Col_Pos,
+                values_from = Value,
+                names_prefix = "Col_") %>%
+    ungroup() %>%
+    mutate(Metric = case_when(
+      Metric == "Series"            ~ "",
+      Metric == "Days_in_Bubble"    ~ "Days in Bubble",
+      Metric == "Number_of_Bubbles" ~ "Number of Bubbles"
+    )) %>%
+    select(Metric, starts_with("Col_"))           # handles <16 series safely
+  
+  df_reshaped[is.na(df_reshaped)] <- ""
+  
+  # 4. Determine actual number of columns for col.names and linesep
+  n_cols <- ncol(df_reshaped) - 1                 # exclude Metric column
+  
+  # linesep: every 3rd row gets \addlinespace (one block = 3 rows)
+  n_blocks   <- ceiling(n_series / 4)
+  linesep_vec <- rep(c("", "", "\\addlinespace"), n_blocks)[seq_len(n_blocks * 3)]
+  
+  # 5. LaTeX table
+  kable_output <- kable(df_reshaped,
+                        format    = "latex",
+                        booktabs  = TRUE,
+                        col.names = NULL,
+                        linesep   = linesep_vec,
+                        caption   = caption,
+                        label     = label)
+  
+  print(kable_output)
+  
+  # 6. Optional CSV export
+  if (!is.null(csv_path)) {
+    write_csv2(df_summary, csv_path)
+    message("Saved: ", csv_path)
+  }
+  
+  invisible(df_summary)   # return silently for downstream use if needed
+}
+
+# ---- 6.1 Call for both versions ----
+
+make_bubble_table(
+  df_dataset = df_final_dataset_up,
+  rects      = bubble_rects,
+  caption    = "Summary of speculative bubble episodes (upward only).",
+  label      = "tab:bubble_summary_up",
+  csv_path   = here("R/results_R", "bubble_summary_up.csv")
+)
+
+make_bubble_table(
+  df_dataset = df_final_dataset_updown,
+  rects      = bubble_rects_all,
+  caption    = "Summary of speculative bubble episodes (all directions).",
+  label      = "tab:bubble_summary_updown",
+  csv_path   = here("R/results_R", "bubble_summary_updown.csv")
+)
+
+
+# ---- 7 Descriptive stats ----
+
+
+# ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---
 
 # 1. Identify bubble windows for rectangles (start/end dates)
-bubble_dates <- datestamp(est_results, cv = mc_cv)
+# bubble_dates <- datestamp(est_results, cv = mc_cv)
 
 # # 2. Create 0-1 Dummies manually from datestamp results
 # # Initialize a dataframe with all zeros
@@ -235,250 +435,228 @@ bubble_dates <- datestamp(est_results, cv = mc_cv)
 
 # 2. Pre-allocate an empty matrix for the zero-one dummies
 
-series_names <- names(df_final)[-1] 
-dummy_matrix <- matrix(0L, nrow = nrow(df_final), ncol = length(series_names))
-colnames(dummy_matrix) <- paste0(series_names, "_BD")
-
-# 2. Iterate through series and evaluate whole episodes
-for (i in seq_along(series_names)) {
-  series <- series_names[i]
-  periods <- bubble_dates[[series]]
-  
-  if (!is.null(periods) && nrow(periods) > 0) {
-    
-    # Extract prices as a strict numeric vector to avoid tibble/dataframe subsetting issues
-    # Note: Ensure you are referencing the correct dataframe for prices (data_matrix or df_final)
-    prices <- as.numeric(df_final[[series]])
-    
-    for (j in 1:nrow(periods)) {
-      start_idx <- periods[j, "Start"]
-      end_idx   <- periods[j, "End"]
-      
-      # THE EPISODE FILTER: 
-      # Check if the price actually grew over the course of the explosive period.
-      # This completely eliminates declining bubbles (crashes).
-      if (prices[end_idx] > prices[start_idx]) {
-        
-        # If it's a true upward bubble, fill the entire period with 1s
-        dummy_matrix[start_idx:end_idx, i] <- 1L
-        
-      }
-    }
-  }
-}
-
-# 3. Final merge
-df_final_dataset <- bind_cols(df_final, as_tibble(dummy_matrix))
-head(df_final_dataset)
-
-# --- 5.2. Prepare Plotting Data ---
-
-# Create a dataframe with rectangle coordinates for ggplot
-# bubble_rects <- map_df(names(bubble_dates), function(name) {
-#   periods <- bubble_dates[[name]]
-#   # Check if periods exist and have rows
+# series_names <- names(df_final)[-1] 
+# dummy_matrix <- matrix(0L, nrow = nrow(df_final), ncol = length(series_names))
+# colnames(dummy_matrix) <- paste0(series_names, "_BD")
+# 
+# # 2. Iterate through series and evaluate whole episodes
+# for (i in seq_along(series_names)) {
+#   series <- series_names[i]
+#   periods <- bubble_dates[[series]]
+#   
 #   if (!is.null(periods) && nrow(periods) > 0) {
-#     tibble(
-#       Series = name,
-#       xmin = df_final$Date[periods[, "Start"]],
-#       xmax = df_final$Date[periods[, "End"]],
-#       ymin = -Inf, 
-#       ymax = Inf
-#     )
-#   } else {
-#     # Return empty tibble with correct structure
-#     tibble(Series = character(), xmin = as.Date(character()), 
-#            xmax = as.Date(character()), ymin = numeric(), ymax = numeric())
+#     
+#     # Extract prices as a strict numeric vector to avoid tibble/dataframe subsetting issues
+#     # Note: Ensure you are referencing the correct dataframe for prices (data_matrix or df_final)
+#     prices <- as.numeric(df_final[[series]])
+#     
+#     for (j in 1:nrow(periods)) {
+#       start_idx <- periods[j, "Start"]
+#       end_idx   <- periods[j, "End"]
+#       
+#       # THE EPISODE FILTER: 
+#       # Check if the price actually grew over the course of the explosive period.
+#       # This completely eliminates declining bubbles (crashes).
+#       if (prices[end_idx] > prices[start_idx]) {
+#         
+#         # If it's a true upward bubble, fill the entire period with 1s
+#         dummy_matrix[start_idx:end_idx, i] <- 1L
+#         
+#       }
+#     }
 #   }
+# }
+# 
+# # 3. Final merge
+# df_final_dataset <- bind_cols(df_final, as_tibble(dummy_matrix))
+# head(df_final_dataset)
+# ##df_final_dataset is not corrected for the downward trend in the data
+# write_csv2(df_final_dataset, here("R/results_R", "series_and_bubble_up_down.csv"))
+# 
+# # --- 5.2. Prepare Plotting Data ---
+# 
+# # 1. Helper function: Evaluates the OLS trend for a single episode
+# is_positive_trend <- function(start_idx, end_idx, prices) {
+#   p <- prices[start_idx:end_idx]
+#   # Returns TRUE if OLS slope > 0, otherwise checks simple start/end difference
+#   if (length(p) > 2) coef(lm(p ~ seq_along(p)))[2] > 0 else tail(p, 1) > head(p, 1)
+# }
+# 
+# # 2. Filter the raw exuber list cleanly using purrr::imap
+# bubble_dates_filtered <- imap(datestamp(est_results, cv = mc_cv), ~ {
+#   if (is.null(.x) || nrow(.x) == 0) return(NULL)
+#   
+#   prices <- as.numeric(df_final[[.y]])
+#   # Apply our helper function to every row (episode) in the current series
+#   keep <- apply(.x, 1, function(row) is_positive_trend(row["Start"], row["End"], prices))
+#   
+#   # Return only the rows that passed the filter
+#   .x[keep, , drop = FALSE]
+# }) %>% compact() # compact() safely removes any series that ended up empty (NULL)
+# 
+# # 3. Generate plotting rectangles (Ultra-short imap_dfr approach)
+# bubble_rects <- imap_dfr(bubble_dates_filtered, ~ tibble(
+#   Series = .y,
+#   xmin = df_final$Date[.x[, "Start"]],
+#   xmax = df_final$Date[.x[, "End"]],
+#   ymin = -Inf, 
+#   ymax = Inf
+# ))
+# 
+# # 4. Generate 0-1 dummies and attach them to the main dataset
+# dummy_df <- map_dfc(names(df_final)[-1], function(series) {
+#   vec <- rep(0L, nrow(df_final))
+#   periods <- bubble_dates_filtered[[series]]
+#   
+#   # Inject 1s into the vector for valid periods
+#   if (!is.null(periods) && nrow(periods) > 0) {
+#     for(i in 1:nrow(periods)) vec[periods[i, "Start"]:periods[i, "End"]] <- 1L
+#   }
+#   
+#   # Create a named column dynamically (e.g., LISAME_BD)
+#   tibble(!!paste0(series, "_BD") := vec)
 # })
+# 
+# # Final merge
+# df_final_dataset_up <- bind_cols(df_final, dummy_df)
+# write_csv2(df_final_dataset_up, here("R/results_R", "series_and_bubble_up.csv"))
+# 
+# #check
+# sum(df_final_dataset$LISAME_BD)
+# sum(df_final_dataset_up$LISAME_BD)
 
-# Identify series that actually contained at least one bubble period
-# active_series <- if(nrow(bubble_rects) > 0) unique(bubble_rects$Series) else character(0)
-
-# 1. Helper function: Evaluates the OLS trend for a single episode
-is_positive_trend <- function(start_idx, end_idx, prices) {
-  p <- prices[start_idx:end_idx]
-  # Returns TRUE if OLS slope > 0, otherwise checks simple start/end difference
-  if (length(p) > 2) coef(lm(p ~ seq_along(p)))[2] > 0 else tail(p, 1) > head(p, 1)
-}
-
-# 2. Filter the raw exuber list cleanly using purrr::imap
-bubble_dates_filtered <- imap(datestamp(est_results, cv = mc_cv), ~ {
-  if (is.null(.x) || nrow(.x) == 0) return(NULL)
-  
-  prices <- as.numeric(df_final[[.y]])
-  # Apply our helper function to every row (episode) in the current series
-  keep <- apply(.x, 1, function(row) is_positive_trend(row["Start"], row["End"], prices))
-  
-  # Return only the rows that passed the filter
-  .x[keep, , drop = FALSE]
-}) %>% compact() # compact() safely removes any series that ended up empty (NULL)
-
-# 3. Generate plotting rectangles (Ultra-short imap_dfr approach)
-bubble_rects <- imap_dfr(bubble_dates_filtered, ~ tibble(
-  Series = .y,
-  xmin = df_final$Date[.x[, "Start"]],
-  xmax = df_final$Date[.x[, "End"]],
-  ymin = -Inf, 
-  ymax = Inf
-))
-
-# 4. Generate 0-1 dummies and attach them to the main dataset
-dummy_df <- map_dfc(names(df_final)[-1], function(series) {
-  vec <- rep(0L, nrow(df_final))
-  periods <- bubble_dates_filtered[[series]]
-  
-  # Inject 1s into the vector for valid periods
-  if (!is.null(periods) && nrow(periods) > 0) {
-    for(i in 1:nrow(periods)) vec[periods[i, "Start"]:periods[i, "End"]] <- 1L
-  }
-  
-  # Create a named column dynamically (e.g., LISAME_BD)
-  tibble(!!paste0(series, "_BD") := vec)
-})
-
-# Final merge
-df_final_dataset <- bind_cols(df_final, dummy_df)
 
 # --- 5.3. Final Plotting & Saving ---
 
 # 1. Identify all price series (excluding Date and the dummy _BD columns)
-all_price_series <- names(df_final_dataset)[!names(df_final_dataset) %in% c("Date") & 
-                                              !grepl("_BD$", names(df_final_dataset))]
+# all_price_series <- names(df_final_dataset)[!names(df_final_dataset) %in% c("Date") & 
+#                                               !grepl("_BD$", names(df_final_dataset))]
+# 
+# # 2. Prepare the price data for ALL series
+# df_plot_all <- df_final_dataset %>%
+#   select(Date, all_of(all_price_series)) %>%
+#   pivot_longer(-Date, names_to = "Series", values_to = "Price")
+# 
+# # 3. Create the 4x4 Grid Plot
+# bubble_plot_final <- ggplot() +
+#   # Layer 1: Shaded yellow areas (only where OLS filter passed)
+#   # It uses the bubble_rects we generated earlier
+#   {if(nrow(bubble_rects) > 0) {
+#     geom_rect(data = bubble_rects, 
+#               aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+#               fill ="grey2", alpha = 0.5)
+#   }} +
+#   # Layer 2: Black price lines for ALL series
+#   geom_line(data = df_plot_all, aes(x = Date, y = Price), color = "black", linewidth = 0.5) +
+#   # Layout: 4 columns to create the 4x4 look (depending on the number of series)
+#   facet_wrap(~ Series, scales = "free_y", ncol = 4) +
+#   theme_minimal() +
+#   theme(
+#     strip.text = element_text(face = "plain", size = 9),
+#     panel.grid.minor = element_blank(),
+#     axis.text = element_text(size = 7)
+#   ) +
+#   labs(title = "",
+#        #subtitle = "",
+#        x = NULL, y = "")
+# 
+# # Display the plot
+# print(bubble_plot_final)
+# ggsave(here("graphsR", "bubbles_detected_only.pdf"), bubble_plot_final)
 
-# 2. Prepare the price data for ALL series
-df_plot_all <- df_final_dataset %>%
-  select(Date, all_of(all_price_series)) %>%
-  pivot_longer(-Date, names_to = "Series", values_to = "Price")
-
-# 3. Create the 4x4 Grid Plot
-bubble_plot_final <- ggplot() +
-  # Layer 1: Shaded yellow areas (only where OLS filter passed)
-  # It uses the bubble_rects we generated earlier
-  {if(nrow(bubble_rects) > 0) {
-    geom_rect(data = bubble_rects, 
-              aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
-              fill ="grey2", alpha = 0.5)
-  }} +
-  # Layer 2: Black price lines for ALL series
-  geom_line(data = df_plot_all, aes(x = Date, y = Price), color = "black", linewidth = 0.5) +
-  # Layout: 4 columns to create the 4x4 look (depending on the number of series)
-  facet_wrap(~ Series, scales = "free_y", ncol = 4) +
-  theme_minimal() +
-  theme(
-    strip.text = element_text(face = "plain", size = 9),
-    panel.grid.minor = element_blank(),
-    axis.text = element_text(size = 7)
-  ) +
-  labs(title = "",
-       #subtitle = "",
-       x = NULL, y = "")
-
-# Display the plot
-print(bubble_plot_final)
-ggsave(here("graphsR", "bubbles_detected_only.pdf"), bubble_plot_final)
-
-# ---- 5.3.A Table for bubbles: ----
-library(dplyr)
-library(tidyr)
-library(knitr)
-
-# 1. Base calculations
-# 1. Base calculations for the metrics
-bubble_counts <- bubble_rects %>%
-  count(Series, name = "Number_of_Bubbles")
-
-df_summary <- tibble(Series = all_price_series) %>%
-  arrange(Series) %>% 
-  rowwise() %>%
-  mutate(Days_in_Bubble = sum(df_final_dataset[[paste0(Series, "_BD")]] == 1, na.rm = TRUE)) %>%
-  ungroup() %>%
-  left_join(bubble_counts, by = "Series") %>%
-  mutate(Number_of_Bubbles = replace_na(Number_of_Bubbles, 0))
-
-# 2. Reshape the dataframe into the exact visual layout (Blocks of 4)
-df_reshaped <- df_summary %>%
-  # Assign each metal to a specific block (row of 4) and a specific column position (1 to 4)
-  mutate(Block = ceiling(row_number() / 4),
-         Col_Pos = (row_number() - 1) %% 4 + 1) %>%
-  
-  # Convert all columns to character so we can mix text (Metal Names) and numbers in the final table
-  mutate(across(everything(), as.character)) %>%
-  
-  # Pivot to a long format to stack Series, Days, and Counts vertically
-  pivot_longer(cols = c(Series, Days_in_Bubble, Number_of_Bubbles), 
-               names_to = "Metric", values_to = "Value") %>%
-  
-  # Enforce the correct display order: Series Name -> Days -> Number of Bubbles
-  mutate(Metric = factor(Metric, levels = c("Series", "Days_in_Bubble", "Number_of_Bubbles"))) %>%
-  arrange(Block, Metric, Col_Pos) %>%
-  
-  # Pivot back to a wide format, explicitly creating 4 columns
-  pivot_wider(id_cols = c(Block, Metric), names_from = Col_Pos, values_from = Value, names_prefix = "Col_") %>%
-  ungroup() %>%
-  
-  # Prepare clean row labels for publication
-  mutate(Metric = case_when(
-    Metric == "Series" ~ "",  # Leave the metric name blank for the row containing metal names
-    Metric == "Days_in_Bubble" ~ "Days in Bubble",
-    Metric == "Number_of_Bubbles" ~ "Number of Bubbles"
-  )) %>%
-  
-  # Drop the technical 'Block' column, keeping only the final layout
-  select(Metric, Col_1, Col_2, Col_3, Col_4)
-
-# Replace any potential NAs with empty strings (useful if you have e.g., 14 series instead of exactly 16)
-df_reshaped[is.na(df_reshaped)] <- ""
-
-# 3. Generate clean, publication-ready LaTeX code
-kable_output <- kable(df_reshaped, 
-                      format = "latex", 
-                      booktabs = TRUE, 
-                      col.names = NULL, # Hides the default dataframe column names (Col_1, Col_2, etc.)
-                      linesep = c("", "", "\\addlinespace"), # Adds a subtle vertical space between metal blocks
-                      caption = "Summary of speculative bubble episodes.",
-                      label = "tab:bubble_summary")
-
-# Print to console so you can copy and paste directly into Overleaf
-print(kable_output)
-
-write_csv2(df_summary, here("R/results_R", "bubble_summary_excel.csv"))
-
-# --- 5.4. Export Results ---
-
-# Save the dummy variables for the GARCH model
-write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
+# ---- 6 .A Table for bubbles: ----
+# library(dplyr)
+# library(tidyr)
+# library(knitr)
+# 
+# # 1. Base calculations
+# # 1. Base calculations for the metrics
+# bubble_counts <- bubble_rects %>%
+#   count(Series, name = "Number_of_Bubbles")
+# 
+# df_summary <- tibble(Series = all_price_series) %>%
+#   arrange(Series) %>% 
+#   rowwise() %>%
+#   mutate(Days_in_Bubble = sum(df_final_dataset[[paste0(Series, "_BD")]] == 1, na.rm = TRUE)) %>%
+#   ungroup() %>%
+#   left_join(bubble_counts, by = "Series") %>%
+#   mutate(Number_of_Bubbles = replace_na(Number_of_Bubbles, 0))
+# 
+# # 2. Reshape the dataframe into the exact visual layout (Blocks of 4)
+# df_reshaped <- df_summary %>%
+#   # Assign each metal to a specific block (row of 4) and a specific column position (1 to 4)
+#   mutate(Block = ceiling(row_number() / 4),
+#          Col_Pos = (row_number() - 1) %% 4 + 1) %>%
+#   
+#   # Convert all columns to character so we can mix text (Metal Names) and numbers in the final table
+#   mutate(across(everything(), as.character)) %>%
+#   
+#   # Pivot to a long format to stack Series, Days, and Counts vertically
+#   pivot_longer(cols = c(Series, Days_in_Bubble, Number_of_Bubbles), 
+#                names_to = "Metric", values_to = "Value") %>%
+#   
+#   # Enforce the correct display order: Series Name -> Days -> Number of Bubbles
+#   mutate(Metric = factor(Metric, levels = c("Series", "Days_in_Bubble", "Number_of_Bubbles"))) %>%
+#   arrange(Block, Metric, Col_Pos) %>%
+#   
+#   # Pivot back to a wide format, explicitly creating 4 columns
+#   pivot_wider(id_cols = c(Block, Metric), names_from = Col_Pos, values_from = Value, names_prefix = "Col_") %>%
+#   ungroup() %>%
+#   
+#   # Prepare clean row labels for publication
+#   mutate(Metric = case_when(
+#     Metric == "Series" ~ "",  # Leave the metric name blank for the row containing metal names
+#     Metric == "Days_in_Bubble" ~ "Days in Bubble",
+#     Metric == "Number_of_Bubbles" ~ "Number of Bubbles"
+#   )) %>%
+#   
+#   # Drop the technical 'Block' column, keeping only the final layout
+#   select(Metric, Col_1, Col_2, Col_3, Col_4)
+# 
+# # Replace any potential NAs with empty strings (useful if you have e.g., 14 series instead of exactly 16)
+# df_reshaped[is.na(df_reshaped)] <- ""
+# 
+# # 3. Generate clean, publication-ready LaTeX code
+# kable_output <- kable(df_reshaped, 
+#                       format = "latex", 
+#                       booktabs = TRUE, 
+#                       col.names = NULL, # Hides the default dataframe column names (Col_1, Col_2, etc.)
+#                       linesep = c("", "", "\\addlinespace"), # Adds a subtle vertical space between metal blocks
+#                       caption = "Summary of speculative bubble episodes.",
+#                       label = "tab:bubble_summary")
+# 
+# # Print to console so you can copy and paste directly into Overleaf
+# print(kable_output)
+# 
+# write_csv2(df_summary, here("R/results_R", "bubble_summary_excel.csv"))
+# 
+# # --- 5.4. Export Results ---
+# 
+# # Save the dummy variables for the GARCH model
+# write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
 
 
-if(length(active_series) > 0) {
-  ggsave(here("outputs", "figures", "bubble_tests", "bubbles_detected_only.pdf"), bubble_plot, 
-         width = 10, height = 8)
-  message("Plot saved successfully")
-} else {
-  message("No bubbles detected - no plot generated")
-}
 
-print(bubble_plot)
 
-# --- 5.5. Final Verification ---
-message("--- Final Verification ---")
-message("Total series in dataset: ", length(series_names))
-message("Series with detected bubbles: ", length(active_series))
-if(length(active_series) > 0) {
-  message("Bubble series: ", paste(active_series, collapse = ", "))
-}
-
-# Display summary of bubble dummies
-message("\nBubble dummy summary (first 10 rows):")
-print(head(bubble_dummies, 10))
-
-message("\nBubble periods per series (column sums):")
-col_sums <- colSums(bubble_dummies[, -1])  # Exclude Date column
-print(col_sums[col_sums > 0])  # Only show series with bubbles
-
-message("\nUnique values in dummy columns:")
-unique_vals <- unique(unlist(bubble_dummies[, -1]))
-message("Values found: ", paste(unique_vals, collapse = ", "))
+# # --- 5.5. Final Verification ---
+# message("--- Final Verification ---")
+# message("Total series in dataset: ", length(series_names))
+# message("Series with detected bubbles: ", length(active_series))
+# if(length(active_series) > 0) {
+#   message("Bubble series: ", paste(active_series, collapse = ", "))
+# }
+# 
+# # Display summary of bubble dummies
+# message("\nBubble dummy summary (first 10 rows):")
+# print(head(bubble_dummies, 10))
+# 
+# message("\nBubble periods per series (column sums):")
+# col_sums <- colSums(bubble_dummies[, -1])  # Exclude Date column
+# print(col_sums[col_sums > 0])  # Only show series with bubbles
+# 
+# message("\nUnique values in dummy columns:")
+# unique_vals <- unique(unlist(bubble_dummies[, -1]))
+# message("Values found: ", paste(unique_vals, collapse = ", "))
 
 
 # --- 5.1. Extract Dummies & Identification (Direct Method) ---
@@ -539,8 +717,6 @@ bubble_plot <- ggplot() +
 
 # --- 5.4. Export Results ---
 
-# Save the dummy variables for the GARCH model
-write_csv(bubble_dummies, here("data", "bubble_dummies.csv"))
 
 # Save the plot as a PDF
 ggsave(here("outputs", "figures", "bubble_tests", "bubbles_detected_only.pdf"), bubble_plot, width = 10, height = 8)
@@ -592,6 +768,8 @@ for (series_name in names(bubble_dates)) {
   }
 }
 
+
+#################################################################################
 # --- Alternative: Create separate dummy columns for up/down ---
 # This creates two columns per series: seriesname_up and seriesname_down
 
