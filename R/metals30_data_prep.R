@@ -203,12 +203,22 @@ data_matrix <- as.data.frame(df_filtered[,-1])
 rownames(data_matrix) <- as.character(df_filtered$Date)
 
 # 2. GSADF Calculation
-est_results <- radf(data_matrix) #, minw = 105
+est_results <- radf(data_matrix) 
+mc_cv_path <- here("outputs", "R_objects", "mc_cv.rds")
+
+if (file.exists(mc_cv_path)) {
+  mc_cv <- readRDS(mc_cv_path)
+  message("Loaded mc_cv from cache.")
+} else {
+  mc_cv <- radf_mc_cv(n = nrow(data_matrix), seed = 123)
+  saveRDS(mc_cv, mc_cv_path)
+  message("Computed and saved mc_cv.")
+}
 #mc_cv <- radf_mc_cv(n = nrow(data_matrix), seed = 123) #minw = 105, 
 
-#saveRDS(mc_cv, "mc_cv_bubble_df_daly_20171101.rds")
-mc_cv <- readRDS("mc_cv_bubble_df_daly_20171101.rds")
-#summary(est_results, cv = mc_cv) #show critical values:
+# saveRDS(mc_cv, "mc_cv_bubble_df_daly_20171101.rds")
+# mc_cv <- readRDS("mc_cv_bubble_df_daly_20171101.rds")
+# summary(est_results, cv = mc_cv) #show critical values:
 
 # 3. Extract Dates (Significance 5%)
 bubble_dates <- datestamp(est_results, cv = mc_cv, p = 0.05)
@@ -218,23 +228,26 @@ series_names <- names(data_matrix)
 dummy_matrix <- matrix(0L, nrow = nrow(df_filtered), ncol = length(series_names))
 colnames(dummy_matrix) <- paste0(series_names, "_BD")
 
+# Reuse the same helper from the previous script
+is_positive_trend <- function(start_idx, end_idx, prices) {
+  p <- prices[start_idx:end_idx]
+  if (length(p) > 2) coef(lm(p ~ seq_along(p)))[2] > 0 else tail(p, 1) > head(p, 1)
+}
+
+#claude version with OLS
 for (series in series_names) {
   periods <- bubble_dates[[series]]
   if (!is.null(periods) && nrow(periods) > 0) {
-    for (i in 1:nrow(periods)) {
+    
+    prices <- as.numeric(df_filtered[[series]])   # raw prices for OLS direction check
+    
+    for (i in seq_len(nrow(periods))) {
       start_idx <- periods[i, "Start"]
       end_idx   <- periods[i, "End"]
       
-      # THE TREND FILTER: 
-      # Only mark as a bubble if price is higher than it was 5 days ago
-      # This kills the 'declining' bubbles in Lithium (2018-2020)
-      for (idx in start_idx:end_idx) {
-        if (idx > 5) {
-          # Compare current log-price to 5-day lagged log-price
-          if (data_matrix[idx, series] > data_matrix[idx - 5, series]) {
-            dummy_matrix[idx, paste0(series, "_BD")] <- 1L
-          }
-        }
+      # OLS TREND FILTER: mark entire episode only if slope is positive
+      if (is_positive_trend(start_idx, end_idx, prices)) {
+        dummy_matrix[start_idx:end_idx, paste0(series, "_BD")] <- 1L
       }
     }
   }
@@ -243,14 +256,37 @@ for (series in series_names) {
 # 5. Final Dataset Construction
 df_final_dataset <- bind_cols(df_filtered, as_tibble(dummy_matrix))
 
-# Use a clear name to avoid loading old files
-saveRDS(df_final_dataset, "R/data_R/bubble_results_new_baseline.rds")
-write.csv2(df_final_dataset, "R/data_R/df_final_dataset201711_1.csv")
-sum(df_final_dataset$CUDALY_BD)/nrow(df_final_dataset)
+#gemini version with the price 5 days ago
+# for (series in series_names) {
+#   periods <- bubble_dates[[series]]
+#   if (!is.null(periods) && nrow(periods) > 0) {
+#     for (i in 1:nrow(periods)) {
+#       start_idx <- periods[i, "Start"]
+#       end_idx   <- periods[i, "End"]
+#       
+#       # THE TREND FILTER: 
+#       # Only mark as a bubble if price is higher than it was 5 days ago
+#       # This kills the 'declining' bubbles in Lithium (2018-2020)
+#       for (idx in start_idx:end_idx) {
+#         if (idx > 5) {
+#           # Compare current log-price to 5-day lagged log-price
+#           if (data_matrix[idx, series] > data_matrix[idx - 5, series]) {
+#             dummy_matrix[idx, paste0(series, "_BD")] <- 1L
+#           }
+#         }
+#       }
+#     }
+#   }
+# }
 
+
+# Use a clear name to avoid loading old files
+saveRDS(df_final_dataset, "R/data_R/df_final_dataset201711_OLS.rds")
+write.csv2(df_final_dataset, "R/data_R/df_final_dataset201711_OLS.csv")
+
+#sum(df_final_dataset$CUDALY_BD)/nrow(df_final_dataset)
+#sum(df_final_dataset$NIDALY_BD)/nrow(df_final_dataset)
 #df_final_dataset <- readRDS("R/data_R/bubble_dummies_df_daly.rds")
-#count bubbles in LIDALY:
-sum(df_final_dataset$NIDALY_BD)/nrow(df_final_dataset)
 
 
 ### Alternative approach - with momentum -- start here!!!
