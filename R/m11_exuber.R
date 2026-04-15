@@ -172,7 +172,6 @@ if (file.exists(mc_cv)) {
   message("Computed and saved mc_cv.")
 }
 
-
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
 summary(est_results, cv = mc_cv)
@@ -400,11 +399,41 @@ make_bubble_table(
   csv_path   = here("R/results_R", "bubble_summary_updown.csv")
 )
 
+# ---- 7. Descriptive Statistics ----
+library(knitr)
+library(kableExtra)
 
+# 1. Compute log-returns (same transformation used for RADF)
 
-# ---- 7 Descriptive stats ----
+df_desc <- df_returns %>%
+  select(-Date) %>%
+  reframe(across(everything(), list(
+    Mean = ~ mean(.x, na.rm = TRUE),
+    Std  = ~ sd(.x,   na.rm = TRUE),
+    Min  = ~ min(.x,  na.rm = TRUE),
+    Q1   = ~ quantile(.x, 0.25, na.rm = TRUE),
+    Q3   = ~ quantile(.x, 0.75, na.rm = TRUE),
+    Max  = ~ max(.x,  na.rm = TRUE)
+  ))) %>%
+  pivot_longer(everything(),
+               names_to      = c("Ticker", ".value"),
+               names_pattern = "^(.+)_(Mean|Std|Min|Q1|Q3|Max)$") %>%
+  arrange(Ticker)
 
+df_desc_fmt <- df_desc %>%
+  mutate(across(c(Mean, Std, Min, Q1, Q3, Max),
+                ~ formatC(.x, digits = 6, format = "f")))
 
+kable_output <- kable(df_desc_fmt,
+                      format    = "latex",
+                      booktabs  = TRUE,
+                      linesep   = "",
+                      caption   = "Descriptive Statistics of Metal Price Returns",
+                      label     = "tab:metals_returns_stats",
+                      col.names = c("Ticker", "Mean", "Std", "Min", "Q1", "Q3", "Max"))
+print(kable_output)
+
+write_csv2(df_desc_fmt, here("R/results_R", "descriptive_stats.csv"))
 
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---
