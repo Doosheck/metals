@@ -181,13 +181,33 @@ run_metal_analysis <- function(metal_name, columns) {
     # Basic model
     trace_stats_basic <- jo_basic@teststat
     crit_vals_basic <- jo_basic@cval[, 2]  # 5% critical values
-    r_basic <- sum(trace_stats_basic > crit_vals_basic)
+    #r_basic <- sum(trace_stats_basic > crit_vals_basic)
+    
+    n_tests_basic <- length(trace_stats_basic)
+    r_basic <- 0
+    for (i in n_tests_basic:1) {
+      if (trace_stats_basic[i] > crit_vals_basic[i]) {
+        r_basic <- r_basic + 1
+      } else {
+        break 
+      }
+    }
     
     # Model with exogenous (if we have bubbles)
     if (!is.null(jo_ex)) {
       trace_stats_ex <- jo_ex@teststat
       crit_vals_ex <- jo_ex@cval[, 2]
-      r_ex <- sum(trace_stats_ex > crit_vals_ex)
+      
+      # Corrected sequential test
+      n_tests_ex <- length(trace_stats_ex)
+      r_ex <- 0
+      for (i in n_tests_ex:1) {
+        if (trace_stats_ex[i] > crit_vals_ex[i]) {
+          r_ex <- r_ex + 1
+        } else {
+          break 
+        }
+      }
     } else {
       trace_stats_ex <- rep(NA, length(trace_stats_basic))
       crit_vals_ex <- rep(NA, length(crit_vals_basic))
