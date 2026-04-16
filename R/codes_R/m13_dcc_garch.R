@@ -4,7 +4,9 @@ library(rugarch)
 library(here)
 
 # --- 2. Load Processed Data ---
-df_prices  <- read_csv(here("data", "combined_metals_cleaned.csv"), show_col_types = FALSE)
+#write_csv2(df_final_dataset_up, here("R/results_R", "series_and_bubble_up.csv"))
+df_metals  <- read_csv(here("R/results_R", "series_and_bubble_up.csv"), show_col_types = FALSE)
+df_prices
 df_dummies <- read_csv(here("data", "bubble_dummies.csv"), show_col_types = FALSE)
 df_dummies_sign <- read_csv(here("data", "bubble_dummies_separate.csv"), show_col_types = FALSE)
 
