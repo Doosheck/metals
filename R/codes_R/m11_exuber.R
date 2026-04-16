@@ -6,8 +6,8 @@ install.packages("here")
 library(tidyverse)
 library(exuber)
 library(visdat)
-library(here) # Critical for OneDrive/Project relative paths
-
+library(here)# Critical for OneDrive/Project relative paths
+library(kableExtra)
 
 # --- 2. Data Loading ---
 # Using here() to ensure paths work across different machines/OneDrive syncs
@@ -54,7 +54,7 @@ drop_map <- list(
   NI = c("NIETFN", "NIINDA"),
   CU = c("CUETFC", "CUSMMG"),
   LI = c("LILAMC", "LIEALC", "LIEABG"),
-  CO = c("COSMMS", "COCOMX")
+  CO = c("COSMMS", "COLMEA")
 )
 
 # --- 2.3. Cleaning & Synchronization Pipeline ---
@@ -64,7 +64,7 @@ list_cleaned <- list(NI = df_NI, CU = df_CU, LI = df_LI, CO = df_CO)[target_meta
   imap(function(df, name) {
     df %>%
       mutate(Date = as.Date(Date)) %>%
-      select(Date, everything(), -any_of(drop_map[[name]])) %>%
+      dplyr::select(Date, everything(), -any_of(drop_map[[name]])) %>%
       # Clip data to your specific window first
       filter(Date >= required_start_date & Date <= required_end_date) %>%
       na.omit()
@@ -124,21 +124,21 @@ message("Total columns in df_final: ", ncol(df_final) - 1)
 df_plot <- df_final %>%
   pivot_longer(cols = -Date, names_to = "Series", values_to = "Price")
 
-# 2. Generate the plot
-ggplot(df_plot, aes(x = Date, y = Price, color = Series)) +
-  geom_line(show.legend = FALSE) + # Legend is redundant if we use facets
-  facet_wrap(~ Series, ncol = 4, scales = "free_y") + 
-  theme_minimal() +
-  labs(
-    title = "Time Series Overview: Metals & LIT",
-    subtitle = "Standardized by individual scales (free y-axis)",
-    x = NULL,
-    y = "Adjusted Price / Value"
-  ) +
-  theme(
-    strip.text = element_text(face = "bold", size = 8),
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
+# 2. Generate the plot - not used in the paper
+# ggplot(df_plot, aes(x = Date, y = Price, color = Series)) +
+#   geom_line(show.legend = FALSE) + # Legend is redundant if we use facets
+#   facet_wrap(~ Series, ncol = 4, scales = "free_y") + 
+#   theme_minimal() +
+#   labs(
+#     title = "Time Series Overview: Metals & LIT",
+#     subtitle = "Standardized by individual scales (free y-axis)",
+#     x = NULL,
+#     y = "Adjusted Price / Value"
+#   ) +
+#   theme(
+#     strip.text = element_text(face = "bold", size = 8),
+#     axis.text.x = element_text(angle = 45, hjust = 1)
+#   )
 
 # --- 4.1. Matrix Preparation ---
 # exuber requires a numeric matrix. We log-transform prices here.
@@ -151,7 +151,6 @@ data_matrix <- df_final %>%
 rownames(data_matrix) <- as.character(df_final$Date)
 
 # --- 4.2. Run RADF Estimation ---
-# This calculates SADF and GSADF statistics for all series in the matrix.
 # Note: This might take a moment depending on the number of series.
 est_results <- radf(data_matrix)
 
@@ -162,7 +161,7 @@ est_results <- radf(data_matrix)
 # for the first time calculate and save
 n_obs <- nrow(data_matrix)
 
-mc_cv <- here("outputs", "R_objects", "mc_cv.rds")
+mc_cv <- here("R", "results_R",  "R_objects", "mc_cv.rds")
 
 if (file.exists(mc_cv)) {
   mc_cv <- readRDS(mc_cv)
@@ -173,15 +172,9 @@ if (file.exists(mc_cv)) {
   message("Computed and saved mc_cv.")
 }
 
-# mc_cv <- radf_mc_cv(n = n_obs, seed = 123) # Seed ensures reproducibility
-# mc_cv
-# saveRDS(mc_cv, here("outputs", "R_objects", "mc_cv.rds"))
-# for the next time:
-# mc_cv <- readRDS(here("outputs", "R_objects", "mc_cv.rds"))
-
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
-summary(est_results, cv = mc_cv)
+# summary(est_results, cv = mc_cv)
 
 
 # ---- 5. Bubble Dummies & Plots Claude ----
@@ -258,7 +251,7 @@ plot_bubbles <- function(df_dataset, rects, title = "") {
   
   # 2. Long format for price lines
   df_plot_long <- df_dataset %>%
-    select(Date, all_of(price_series)) %>%
+    dplyr::select(Date, all_of(price_series)) %>%
     pivot_longer(-Date, names_to = "Series", values_to = "Price")
   
   # 3. Build plot
@@ -276,7 +269,7 @@ plot_bubbles <- function(df_dataset, rects, title = "") {
     facet_wrap(~ Series, scales = "free_y", ncol = 4) +
     theme_minimal() +
     theme(
-      strip.text       = element_text(face = "plain", size = 9),
+      strip.text       = element_text(face = "plain", size = 12), #plot label
       panel.grid.minor = element_blank(),
       axis.text        = element_text(size = 7),
       axis.text.x      = element_text(angle = 45, hjust = 1)
@@ -306,8 +299,8 @@ bubble_rects_all <- imap_dfr(bubble_dates_raw, ~ {
 plot_updown <- plot_bubbles(df_final_dataset_updown, bubble_rects_all, title = "")
 
 # Save — explicit width/height avoids 16-panel crowding
-ggsave(here("graphsR", "bubbles_up_only.pdf"),    plot_up,     width = 14, height = 10)
-ggsave(here("graphsR", "bubbles_up_and_down.pdf"), plot_updown, width = 14, height = 10)
+ggsave(here("R/graphs_R", "bubbles_up_only.pdf"), plot_up, width = 14, height = 10)
+ggsave(here("R/graphs_R", "bubbles_up_and_down.pdf"), plot_updown, width = 14, height = 10)
 
 
 # ---- 6. Table Factory ----
@@ -357,7 +350,7 @@ make_bubble_table <- function(df_dataset, rects,
       Metric == "Days_in_Bubble"    ~ "Days in Bubble",
       Metric == "Number_of_Bubbles" ~ "Number of Bubbles"
     )) %>%
-    select(Metric, starts_with("Col_"))           # handles <16 series safely
+    dplyr::select(Metric, starts_with("Col_"))           # handles <16 series safely
   
   df_reshaped[is.na(df_reshaped)] <- ""
   
@@ -405,6 +398,44 @@ make_bubble_table(
   label      = "tab:bubble_summary_updown",
   csv_path   = here("R/results_R", "bubble_summary_updown.csv")
 )
+
+# ---- 7. Descriptive Statistics ----
+library(knitr)
+library(kableExtra)
+
+# 1. Compute log-returns (same transformation used for RADF)
+
+df_desc <- df_returns %>%
+  dplyr::select(-Date) %>%
+  reframe(across(everything(), list(
+    Mean = ~ mean(.x, na.rm = TRUE),
+    Std  = ~ sd(.x,   na.rm = TRUE),
+    Min  = ~ min(.x,  na.rm = TRUE),
+    Q1   = ~ quantile(.x, 0.25, na.rm = TRUE),
+    Q3   = ~ quantile(.x, 0.75, na.rm = TRUE),
+    Max  = ~ max(.x,  na.rm = TRUE),
+    #Zeros   = ~ sum(.x == 0, na.rm = TRUE),
+    ZeroPct = ~ mean(.x == 0, na.rm = TRUE) * 100
+  ))) %>%
+  pivot_longer(everything(),
+               names_to      = c("Ticker", ".value"),
+               names_pattern = "^(.+)_(Mean|Std|Min|Q1|Q3|Max|ZeroPct)$") %>%
+  arrange(Ticker)
+
+df_desc_fmt <- df_desc %>%
+  mutate(across(c(Mean, Std, Min, Q1, Q3, Max, ZeroPct),
+                ~ formatC(.x, digits = 3, format = "f")))
+
+kable_output <- kable(df_desc_fmt,
+                      format    = "latex",
+                      booktabs  = TRUE,
+                      linesep   = "",
+                      caption   = "Descriptive Statistics of Metal Price Returns",
+                      label     = "tab:metals_returns_stats",
+                      col.names = c("Ticker", "Mean", "Std", "Min", "Q1", "Q3", "Max", "ZeroPct"))
+print(kable_output)
+
+write_csv2(df_desc_fmt, here("R/results_R", "descriptive_stats.csv"))
 
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---
