@@ -560,6 +560,185 @@ print(p_copper_final)
 ggsave("R/graphs_R/correlation_nickel_final.pdf", plot = p_nickel_final, width = 10, height = 6)
 ggsave("R/graphs_R/correlation_copper_final.pdf", plot = p_copper_final, width = 10, height = 6)
 
+#---- 4 metals DCC ----
+library(rugarch)
+library(rmgarch)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# 1. Select the 4 main benchmarks for cross-commodity analysis
+cross_metals <- c("CUDALY", "NIDALY", "LIDALY", "CODALY")
+
+message("Preparing data for the 4D model...")
+df_cross <- df_returns %>%
+  dplyr::select(Date, dplyr::all_of(cross_metals)) %>%
+  na.omit()
+
+# Convert to matrix format required by rmgarch
+m_cross <- as.matrix(df_cross %>% dplyr::select(-Date))
+
+# 2. Univariate specification (same as used previously)
+dcc_margin_spec <- rugarch::ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model     = list(armaOrder = c(5, 0), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+# 3. Multivariate specification (4 dimensions)
+# Primary attempt: Multivariate t-Student (MVT) distribution
+spec_4d_mvt <- dccspec(
+  uspec = multispec(replicate(4, dcc_margin_spec)), 
+  dccOrder = c(1, 1), 
+  distribution = "mvt"
+)
+
+# Fallback attempt: Multivariate Normal (MVNORM) distribution
+spec_4d_norm <- dccspec(
+  uspec = multispec(replicate(4, dcc_margin_spec)), 
+  dccOrder = c(1, 1), 
+  distribution = "mvnorm"
+)
+
+# 4. Estimation (with double safety fallback)
+message("Starting 4D DCC model estimation. This may take a few minutes...")
+
+fit_4d <- tryCatch({
+  # eval.se = FALSE speeds up estimation by skipping standard error calculations
+  dccfit(spec = spec_4d_mvt, data = m_cross, solver = "solnp", fit.control = list(eval.se = FALSE))
+}, error = function(e) {
+  message("MVT failed to converge for 4 dimensions. Trying multivariate normal distribution...")
+  tryCatch({
+    dccfit(spec = spec_4d_norm, data = m_cross, solver = "solnp", fit.control = list(eval.se = FALSE))
+  }, error = function(e2) {
+    message("Critical error: 4D model could not be estimated. Likely due to illiquidity (zeros) in LIDALY/CODALY.")
+    return(NULL)
+  })
+})
+
+# 5. Extract results (if the model converged successfully)
+if (!is.null(fit_4d) && inherits(fit_4d, "DCCfit")) {
+  message("Success! Model estimated. Extracting conditional correlations...")
+  
+  # rcor returns a 3D array: [asset i, asset j, time t]
+  cor_array <- rcor(fit_4d)
+  
+  # Generate all unique pair combinations from the 4 metals (4 choose 2 = 6 pairs)
+  pair_indices <- combn(1:4, 2)
+  
+  # Loop to extract the correlation vector for each pair across the time dimension
+  list_cor_dfs <- lapply(1:ncol(pair_indices), function(i) {
+    idx1 <- pair_indices[1, i]
+    idx2 <- pair_indices[2, i]
+    
+    metal1 <- cross_metals[idx1]
+    metal2 <- cross_metals[idx2]
+    
+    tibble::tibble(
+      Date = df_cross$Date,
+      Pair = paste(metal1, "-", metal2),
+      Correlation = cor_array[idx1, idx2, ]
+    )
+  })
+  
+  # Combine all pairs into a single dataframe for ggplot
+  df_cross_correlations <- dplyr::bind_rows(list_cor_dfs)
+  
+  # 6. Plot the results using the article's minimalist aesthetic
+  theme_article_fixed <- theme_minimal() +
+    theme(
+      panel.grid.major = element_line(color = "#f0f0f0", linewidth = 0.3),
+      panel.grid.minor = element_line(color = "#f8f8f8", linewidth = 0.2),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "plain", size = 10, color = "black"),
+      axis.title = element_blank(),
+      axis.text = element_text(size = 8, color = "gray30"),
+      panel.spacing = unit(1.2, "lines")
+    )
+  
+  plot_4d <- ggplot(df_cross_correlations, aes(x = Date, y = Correlation)) +
+    geom_line(color = "black", linewidth = 0.4) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray80", linewidth = 0.3) +
+    # Layout: 6 panels across 3 columns (2 rows)
+    facet_wrap(~ Pair, ncol = 3, scales = "fixed") + 
+    # Y-axis bounds slightly relaxed compared to intra-metal correlations
+    scale_y_continuous(limits = c(-0.5, 1), breaks = seq(-0.5, 1, 0.25)) +
+    theme_article_fixed
+  
+  print(plot_4d)
+  
+  # Optional: Save the plot as a high-quality PDF for publication
+  # ggsave("Cross_Metals_DCC.pdf", plot = plot_4d, width = 10, height = 6)
+  
+} else {
+  message("Estimation failed entirely. Consider excluding Lithium or Cobalt to run a 3D or bivariate model.")
+}
+
+
+##----plot 4 DALY series in DCC
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# 1. Define the minimalist article theme (ensuring it's loaded in the environment)
+theme_article_fixed <- theme_minimal() +
+  theme(
+    panel.grid.major = element_line(color = "#f0f0f0", linewidth = 0.3),
+    panel.grid.minor = element_line(color = "#f8f8f8", linewidth = 0.2),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "plain", size = 10, color = "black"),
+    axis.title = element_blank(),
+    axis.text = element_text(size = 8, color = "gray30"),
+    panel.spacing = unit(1.2, "lines"),
+    plot.title = element_blank(),
+    plot.subtitle = element_blank()
+  )
+
+# 2. Extract the conditional correlation matrix from the 4D model
+# Assuming the estimated model is saved as 'fit_4d' and the metals are:
+cross_metals <- c("CUDALY", "NIDALY", "LIDALY", "CODALY")
+cor_array <- rcor(fit_4d)
+
+# Generate all unique pair combinations (4 choose 2 = 6 pairs)
+pair_indices <- combn(1:4, 2)
+
+# Loop to extract the correlation vector for each pair and bind them into a dataframe
+list_cor_dfs <- lapply(1:ncol(pair_indices), function(i) {
+  idx1 <- pair_indices[1, i]
+  idx2 <- pair_indices[2, i]
+  
+  metal1 <- cross_metals[idx1]
+  metal2 <- cross_metals[idx2]
+  
+  tibble::tibble(
+    Date = df_cross$Date, # Ensure df_cross represents the data used for estimation
+    Pair = paste(metal1, "-", metal2),
+    Correlation = cor_array[idx1, idx2, ]
+  )
+})
+
+# Combine the list of dataframes into a single tidy dataframe
+df_cross_correlations <- dplyr::bind_rows(list_cor_dfs)
+
+# 3. Plot the results using the minimalist aesthetic
+plot_cross_metals <- ggplot(df_cross_correlations, aes(x = Date, y = Correlation)) +
+  # Thin, black line for correlation dynamics
+  geom_line(color = "black", linewidth = 0.4) +
+  # Reference line at zero correlation
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray80", linewidth = 0.3) +
+  # Facet layout: 3 columns (creates 2 rows for the 6 pairs)
+  facet_wrap(~ Pair, ncol = 3, scales = "fixed") + 
+  # Y-axis bounds set from -0.5 to 1.0 (cross-metal correlations are typically lower)
+  scale_y_continuous(limits = c(-0.5, 1), breaks = seq(-0.5, 1, 0.25)) +
+  theme_article_fixed
+
+# Display the final plot
+print(plot_cross_metals)
+
+# 4. Save the plot for publication (PDF and high-resolution PNG)
+ggsave("R/graphs_R/DCC_4metals.pdf", plot = plot_cross_metals, width = 10, height = 6)
+# ggsave("R/graphs_R/DCC_4metals.png", plot = plot_cross_metals, width = 10, height = 6, dpi = 300)
+
 ## ---- plot nikiel and copper - skip----
 library(ggplot2)
 library(dplyr)
