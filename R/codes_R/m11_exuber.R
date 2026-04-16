@@ -406,23 +406,25 @@ library(kableExtra)
 # 1. Compute log-returns (same transformation used for RADF)
 
 df_desc <- df_returns %>%
-  select(-Date) %>%
+  dplyr::select(-Date) %>%
   reframe(across(everything(), list(
     Mean = ~ mean(.x, na.rm = TRUE),
     Std  = ~ sd(.x,   na.rm = TRUE),
     Min  = ~ min(.x,  na.rm = TRUE),
     Q1   = ~ quantile(.x, 0.25, na.rm = TRUE),
     Q3   = ~ quantile(.x, 0.75, na.rm = TRUE),
-    Max  = ~ max(.x,  na.rm = TRUE)
+    Max  = ~ max(.x,  na.rm = TRUE),
+    #Zeros   = ~ sum(.x == 0, na.rm = TRUE),
+    ZeroPct = ~ mean(.x == 0, na.rm = TRUE) * 100
   ))) %>%
   pivot_longer(everything(),
                names_to      = c("Ticker", ".value"),
-               names_pattern = "^(.+)_(Mean|Std|Min|Q1|Q3|Max)$") %>%
+               names_pattern = "^(.+)_(Mean|Std|Min|Q1|Q3|Max|ZeroPct)$") %>%
   arrange(Ticker)
 
 df_desc_fmt <- df_desc %>%
-  mutate(across(c(Mean, Std, Min, Q1, Q3, Max),
-                ~ formatC(.x, digits = 6, format = "f")))
+  mutate(across(c(Mean, Std, Min, Q1, Q3, Max, ZeroPct),
+                ~ formatC(.x, digits = 3, format = "f")))
 
 kable_output <- kable(df_desc_fmt,
                       format    = "latex",
@@ -430,7 +432,7 @@ kable_output <- kable(df_desc_fmt,
                       linesep   = "",
                       caption   = "Descriptive Statistics of Metal Price Returns",
                       label     = "tab:metals_returns_stats",
-                      col.names = c("Ticker", "Mean", "Std", "Min", "Q1", "Q3", "Max"))
+                      col.names = c("Ticker", "Mean", "Std", "Min", "Q1", "Q3", "Max", "ZeroPct"))
 print(kable_output)
 
 write_csv2(df_desc_fmt, here("R/results_R", "descriptive_stats.csv"))
