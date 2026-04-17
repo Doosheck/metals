@@ -1,5 +1,5 @@
 Metal,Variant,Model,AUC_base,AUC_tuned,Delta_AUC,Best_Params
-Cobalt,lppls_0.05,LASSO,0.909,0.931,0.022,{'C': 0.11668127070008007}
+Cobalt,lppls_0.01,LASSO,0.909,0.931,0.022,{'C': 0.11668127070008007}
 Copper,gsadf_ols,LASSO,0.998,0.998,0.0,{'C': 0.09846738873614563}
 Lithium,gsadf_ols,XGBoost,0.501,0.785,0.284,"{'max_depth': 8, 'learning_rate': 0.11759961677966128, 'n_estimators': 282, 'subsample': 0.9353523847892582, 'colsample_bytree': 0.6632889135694118, 'reg_alpha': 0.5670269117050581, 'reg_lambda': 0.003522894732871624}"
 Nickel,gsadf_v1,LASSO,0.928,0.942,0.014,{'C': 8.660749054295403}
