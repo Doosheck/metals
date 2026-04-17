@@ -437,6 +437,108 @@ print(kable_output)
 
 write_csv2(df_desc_fmt, here("R/results_R", "descriptive_stats.csv"))
 
+#---- 8 Network-----
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(ggplot2)
+
+# 1. Calculate the Pearson correlation matrix
+# 'use = "pairwise.complete.obs"' handles missing data appropriately
+cor_matrix <- cor(df_returns %>% select(-Date), use = "pairwise.complete.obs")
+
+# 2. Convert correlation to Euclidean distance metric
+# Formula: d(x,y) = sqrt(2 * (1 - rho)). 
+# This standard transformation maps correlations [-1, 1] to distances [0, 2].
+dist_matrix <- sqrt(2 * (1 - cor_matrix))
+
+# 3. Convert distance to non-negative network weights (similarity)
+# In igraph, higher weights mean stronger attraction between nodes.
+# By subtracting the distance from the maximum possible distance (2), 
+# highly correlated assets (distance ~ 0) get the highest weight (~ 2).
+weight_matrix <- 2 - dist_matrix
+
+# Optional: Thresholding to remove weak connections (noise)
+weight_matrix[weight_matrix < 0.6] <- 0 
+
+# 4. Build the undirected graph from the weight adjacency matrix
+g <- graph_from_adjacency_matrix(weight_matrix, mode = "undirected", weighted = TRUE, diag = FALSE)
+
+# Calculate node centrality ('strength' = sum of adjacent edge weights)
+V(g)$strength <- strength(g, weights = E(g)$weight)
+
+# Extract metal group prefix (first 2 letters, e.g., "CU" from "CUDALY")
+V(g)$metal <- substr(V(g)$name, 1, 2) 
+
+# 5. Plot the network using ggraph
+
+# ggraph(g, layout = "fr") + # Fruchterman-Reingold layout (pulls connected nodes together)
+#   
+#   # Draw edges: Width is mapped to connection strength (inverted Euclidean distance)
+#   geom_edge_link(aes(edge_width = weight), color = "gray75", alpha = 0.6) +
+#   
+#   # Draw nodes: Size maps to strength, shape and color map to metal group
+#   geom_node_point(aes(size = strength, shape = metal, color = metal)) + #
+#   
+#   # Add ticker labels with repulsive force to avoid overlap
+#   geom_node_text(aes(label = name), repel = TRUE, size = 3, fontface = "bold", color = "black") +
+#   
+#   # Aesthetics scaling
+#   scale_edge_width_continuous(range = c(0.2, 2.5), guide = "none") +
+#   scale_size_continuous(range = c(4, 12), guide = "none") +
+#   
+#   # Map specific shapes to metal groups (16=circle, 15=square, 18=diamond, 17=triangle)
+#   scale_shape_manual(values = c("CU" = 16, "NI" = 15, "LI" = 18, "CO" = 17)) +
+#   
+#   # Map custom colors for clarity
+#   scale_color_manual(values = c("CU" = "chocolate4", "NI" = "steelblue4", 
+#                                 "LI" = "darkgreen", "CO" = "darkorchid4")) +
+#   
+#   theme_void() + # Minimalist blank canvas
+#   labs(
+#     color = "Metal Group", 
+#     shape = "Metal Group"
+#   ) +
+#   theme(legend.position = "none")
+
+set.seed(42) # Ensure reproducible node placement
+fixed_layout <- create_layout(g, layout = "fr")
+ggraph(fixed_layout) + 
+  
+  # Draw edges: Light gray connections
+  geom_edge_link(aes(edge_width = weight), color = "gray80", alpha = 0.7) +
+  
+  # Draw nodes: 
+  # shape = 21 is a circle with a border ('color') and a fill ('fill').
+  # stroke = 0.8 controls the thickness of the black border.
+  geom_node_point(aes(size = strength, fill = metal), shape = 21, color = "black", stroke = 0.8) +
+  
+  # Add labels
+  geom_node_text(aes(label = name), repel = TRUE, size = 5.0, fontface = "bold", color = "black") +
+  
+  # Scales for size and edges
+  scale_edge_width_continuous(range = c(0.2, 2.5), guide = "none") +
+  scale_size_continuous(range = c(8, 20), guide = "none") +
+  
+  # Map shades of gray to the 'fill' of the circles
+  scale_fill_manual(values = c(
+    "CU" = "grey",      # Solid black
+    "NI" = "gray40",     # Dark gray
+    "LI" = "gray85",     # Light gray
+    "CO" = "white"       # White (appears as an empty circle with a black border)
+  )) +
+  
+  theme_void() + 
+  labs(fill = "Metal Group") +
+  theme(
+    legend.position = "none",
+    legend.text = element_text(size = 10),
+    legend.title = element_text(face = "bold", size = 11)
+  )
+
+# Optional: Save the plot
+ggsave("R/graphs_R/Metal_Network.pdf", width = 8, height = 7)
+
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---
 
