@@ -14,9 +14,9 @@ df_dummies <- df_metals[c(1,18:33)]
 
 # --- 3. Data Transformation ---
 # Log returns from log prices
-df_returns <- df_prices %>%
+df_returns_dcc <- df_prices %>%
   arrange(Date) %>%
-  mutate(across(-Date, ~ .x - lag(.x))) %>%
+  dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x)))) %>%
   drop_na()
 
 # Align dummies with returns (dropping the first row because returns lose 1 observation)
@@ -31,13 +31,13 @@ df_dummies_aligned <- df_dummies %>%
 metal_names <- names(df_prices)[names(df_prices) != "Date"]
 
 # Initialize a list to store standardized residuals for DCC
-std_resid_list <- list(Date = df_returns$Date)
+std_resid_list <- list(Date = df_returns_dcc$Date)
 
 # --- 2. The Estimation Loop ---
 #garch_results <- map(metal_names, function(m_name) {
   
   # A. Define the Directional Dummies (Statistical Approach)
-  y <- df_returns[[m_name]]
+  y <- df_returns_dcc[[m_name]]
   dummy_active <- df_dummies_aligned[[m_name]]
   
   d_expanding  <- as.integer(dummy_active == 1 & y >= 0)
@@ -72,7 +72,7 @@ std_resid_list <- list(Date = df_returns$Date)
 garch_results <- map(metal_names, function(m_name) {
   
   # 1. Prepare data
-  y <- df_returns[[m_name]]
+  y <- df_returns_dcc[[m_name]]
   
   # Construct the dummy column name (e.g., "COBALT_BD")
   dummy_col_name <- paste0(m_name, "_BD")
@@ -324,7 +324,7 @@ clean_spec <- ugarchspec(
   message("Estimating STANDARD DCC model for group: ", group_name)
   
   # A. Prepare Data Matrix
-  returns_matrix <- df_returns %>%
+  returns_matrix <- df_returns_dcc %>%
     dplyr::select(dplyr::all_of(series_names)) %>%
     as.matrix()
   
@@ -371,7 +371,7 @@ clean_spec <- ugarchspec(
   # D. Extract Correlations 
   # In standard dccfit, rcor() returns the 3D array [i, j, time] directly
   dcc_correlations <- rcor(fit)
-  time_index <- df_returns$Date 
+  time_index <- df_returns_dcc$Date 
   
   plot_data_list <- list()
   
@@ -415,9 +415,9 @@ clean_spec <- ugarchspec(
     plot  = p,
     data  = df_dcc_plot
   ))
-})
 
-sum(is.na(df_returns))
+
+sum(is.na(df_returns_dcc))
 
 dcc_all_results <- imap(metal_groups, function(series_names, group_name) {
   
@@ -426,7 +426,7 @@ dcc_all_results <- imap(metal_groups, function(series_names, group_name) {
   
   # A. Prepare Data Matrix
   # Ensure only selected columns are used and converted to matrix
-  returns_matrix <- df_returns %>%
+  returns_matrix <- df_returns_dcc %>%
     dplyr::select(dplyr::all_of(series_names)) %>%
     as.matrix()
   
@@ -476,7 +476,7 @@ dcc_all_results <- imap(metal_groups, function(series_names, group_name) {
   # D. Extract Correlations 
   # rcor() returns a 3D array [asset_i, asset_j, time]
   dcc_correlations <- rcor(fit)
-  time_index <- df_returns$Date 
+  time_index <- df_returns_dcc$Date 
   
   plot_data_list <- list()
   
@@ -571,7 +571,7 @@ library(ggplot2)
 cross_metals <- c("CUDALY", "NIDALY", "LIDALY", "CODALY")
 
 message("Preparing data for the 4D model...")
-df_cross <- df_returns %>%
+df_cross <- df_returns_dcc %>%
   dplyr::select(Date, dplyr::all_of(cross_metals)) %>%
   na.omit()
 
@@ -854,7 +854,7 @@ dcc_lithium_cobalt_results <- imap(target_groups, function(series_names, group_n
     message("--> Checking pair: ", paste(pair, collapse=" vs "))
     
     # 1. Prepare data
-    pair_data <- df_returns %>% 
+    pair_data <- df_returns_dcc %>% 
       dplyr::select(Date, dplyr::all_of(pair)) %>% 
       na.omit()
     
@@ -1020,7 +1020,7 @@ ggsave("DCC_Cobalt_Combined.png", plot = plot_cobalt_combined, width = 10, heigh
   })
   
   return(fit)
-}) %>% #set_names(metal_names)
+# %>% #set_names(metal_names)
 
 # --- 6. "Drill Down" Into a Specific Series ---
 
@@ -1075,7 +1075,7 @@ ggsave("DCC_Cobalt_Combined.png", plot = plot_cobalt_combined, width = 10, heigh
 #   
 #   # Estimation
 #   fit <- tryCatch({
-#     ugarchfit(spec = spec, data = df_returns[[m_name]], solver = "hybrid")
+#     ugarchfit(spec = spec, data = df_returns_dcc[[m_name]], solver = "hybrid")
 #   }, error = function(e) NULL)
 #     
 #   return(fit)
@@ -1185,7 +1185,7 @@ df_ext_dummies <- df_dummies_sign %>%
   slice(-1) # Align with returns (drop first row)
 
 # --- 3. Prepare Data for Both Approaches ---
-y <- df_returns[[target_ser]]
+y <- df_returns_dcc[[target_ser]]
 
 # Approach A: Return-Based (Statistical)
 dummy_active <- df_dummies_aligned[[target_ser]]
