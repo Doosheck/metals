@@ -49,11 +49,25 @@ target_metals <- c("NI", "CU", "LI", "CO")
 required_end_date   <- as.Date("2025-07-21")
 required_start_date <- as.Date("2021-07-19")
 
+df_LI %>%
+  #dplyr::select(Date, tail(names(.), 6)) %>%
+  dplyr::select(Date, c("LIDALY", "LICOMX", "LILMEX", "LIANTH")) %>%
+  tidyr::pivot_longer(cols = -Date, names_to = "Szereg", values_to = "Wartosc") %>%
+  ggplot(aes(x = Date, y = log(Wartosc), color = Szereg)) +
+  geom_line(alpha = 0.8) +
+  theme_minimal() +
+  labs(
+    title = "",
+    x = "Data",
+    y = "Wartoœæ",
+    color = "Zmienna"
+  )
+
 # These are the ONLY columns we explicitly discard
 drop_map <- list(
   NI = c("NIETFN", "NIINDA"),
   CU = c("CUETFC", "CUSMMG"),
-  LI = c("LILAMC", "LIEALC", "LIEABG"),
+  LI = c("LILAMC", "LIEALC", "LIEABG", "LIICBG", "LIICIN", "LISAME", "LIANTC"),
   CO = c("COSMMS", "COLMEA")
 )
 
@@ -82,9 +96,9 @@ common_dates <- Reduce(intersect, map(list_filtered, ~ .x$Date)) %>% as.Date()
 # 4. Combine into the final data frame
 # This will now include ALL columns (series) from the surviving metals
 df_final <- list_filtered %>%
-  map(~ filter(.x, Date %in% common_dates)) %>%
-  reduce(full_join, by = "Date") %>%
-  arrange(Date)
+  map(~ dplyr::filter(.x, Date %in% common_dates)) %>%
+  purrr::reduce(full_join, by = "Date") %>%
+  dplyr::arrange(Date)
 
 # --- 2.4. Final Verification ---
 
@@ -142,35 +156,43 @@ df_plot <- df_final %>%
 
 # --- 4.1. Matrix Preparation ---
 # exuber requires a numeric matrix. We log-transform prices here.
-data_matrix <- df_final %>%
-  select(-Date) %>%
+data_log_matrix <- df_final %>%
+  dplyr::select(-Date) %>%
   mutate(across(everything(), log)) %>%
   as.matrix()
 
 # Assign dates as character row names for tracking
-rownames(data_matrix) <- as.character(df_final$Date)
+rownames(data_log_matrix) <- as.character(df_final$Date)
 
 # --- 4.2. Run RADF Estimation ---
 # Note: This might take a moment depending on the number of series.
-est_results <- radf(data_matrix)
+est_results <- radf(data_log_matrix)
 
 # --- 4.3. Calculate Critical Values ---
 # Since we have a specific sample size (n), we generate Monte Carlo 
 # critical values to perform the statistical test.
 
 # for the first time calculate and save
-n_obs <- nrow(data_matrix)
+n_obs <- nrow(data_log_matrix)
 
-mc_cv <- here("R", "results_R",  "R_objects", "mc_cv.rds")
+mc_cv_file <- here::here("R", "results_R", "R_objects", "mc_cv_2021_2025.rds")
 
-if (file.exists(mc_cv)) {
-  mc_cv <- readRDS(mc_cv)
+# 2. Check if THAT specific file path exists
+if (file.exists(mc_cv_file)) {
+  # Load it and assign it to the actual data object
+  mc_cv <- readRDS(mc_cv_file)
   message("Loaded mc_cv from cache.")
+  
 } else {
-  mc_cv <- radf_mc_cv(n = nrow(data_matrix), seed = 123)
-  saveRDS(mc_cv, mc_cv)
+  # Compute the data
+  mc_cv <- radf_mc_cv(n = nrow(data_log_matrix), seed = 123)
+  
+  # Save the data strictly to the path we defined at the top
+  saveRDS(mc_cv, mc_cv_file)
   message("Computed and saved mc_cv.")
 }
+
+
 
 # --- 4.4. Summary of Results ---
 # This displays which series exhibit evidence of speculative bubbles
@@ -404,6 +426,10 @@ library(knitr)
 library(kableExtra)
 
 # 1. Compute log-returns (same transformation used for RADF)
+df_returns <- df_final %>%
+  dplyr::arrange(Date) %>% 
+  dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x))))%>% 
+  drop_na()
 
 df_desc <- df_returns %>%
   dplyr::select(-Date) %>%
@@ -444,22 +470,26 @@ library(ggraph)
 library(ggplot2)
 
 # 1. Calculate the Pearson correlation matrix
-# 'use = "pairwise.complete.obs"' handles missing data appropriately
-cor_matrix <- cor(df_returns %>% select(-Date), use = "pairwise.complete.obs")
+cor_matrix <- cor(df_returns %>% dplyr::select(-Date), use = "pairwise.complete.obs")
 
 # 2. Convert correlation to Euclidean distance metric
 # Formula: d(x,y) = sqrt(2 * (1 - rho)). 
 # This standard transformation maps correlations [-1, 1] to distances [0, 2].
 dist_matrix <- sqrt(2 * (1 - cor_matrix))
+base_weight_matrix <- 2 - dist_matrix
 
-# 3. Convert distance to non-negative network weights (similarity)
-# In igraph, higher weights mean stronger attraction between nodes.
-# By subtracting the distance from the maximum possible distance (2), 
-# highly correlated assets (distance ~ 0) get the highest weight (~ 2).
-weight_matrix <- 2 - dist_matrix
+# 1 approach threshold corr > 0.25 
+weight_matrix <- base_weight_matrix
+cor_threshold <- 0.1 
+weight_threshold <- 2 - sqrt(2 * (1 - cor_threshold))
+weight_matrix[weight_matrix < weight_threshold] <- 0
 
-# Optional: Thresholding to remove weak connections (noise)
-weight_matrix[weight_matrix < 0.6] <- 0 
+# 2 approach: define quantile
+weight_matrix <- base_weight_matrix
+cor_threshold <- quantile(cor_matrix[upper.tri(cor_matrix)], 0.75, na.rm = TRUE)
+cor_threshold
+weight_threshold <- 2 - sqrt(2 * (1 - cor_threshold))
+weight_matrix[weight_matrix < weight_threshold] <- 0
 
 # 4. Build the undirected graph from the weight adjacency matrix
 g <- graph_from_adjacency_matrix(weight_matrix, mode = "undirected", weighted = TRUE, diag = FALSE)
@@ -469,37 +499,6 @@ V(g)$strength <- strength(g, weights = E(g)$weight)
 
 # Extract metal group prefix (first 2 letters, e.g., "CU" from "CUDALY")
 V(g)$metal <- substr(V(g)$name, 1, 2) 
-
-# 5. Plot the network using ggraph
-
-# ggraph(g, layout = "fr") + # Fruchterman-Reingold layout (pulls connected nodes together)
-#   
-#   # Draw edges: Width is mapped to connection strength (inverted Euclidean distance)
-#   geom_edge_link(aes(edge_width = weight), color = "gray75", alpha = 0.6) +
-#   
-#   # Draw nodes: Size maps to strength, shape and color map to metal group
-#   geom_node_point(aes(size = strength, shape = metal, color = metal)) + #
-#   
-#   # Add ticker labels with repulsive force to avoid overlap
-#   geom_node_text(aes(label = name), repel = TRUE, size = 3, fontface = "bold", color = "black") +
-#   
-#   # Aesthetics scaling
-#   scale_edge_width_continuous(range = c(0.2, 2.5), guide = "none") +
-#   scale_size_continuous(range = c(4, 12), guide = "none") +
-#   
-#   # Map specific shapes to metal groups (16=circle, 15=square, 18=diamond, 17=triangle)
-#   scale_shape_manual(values = c("CU" = 16, "NI" = 15, "LI" = 18, "CO" = 17)) +
-#   
-#   # Map custom colors for clarity
-#   scale_color_manual(values = c("CU" = "chocolate4", "NI" = "steelblue4", 
-#                                 "LI" = "darkgreen", "CO" = "darkorchid4")) +
-#   
-#   theme_void() + # Minimalist blank canvas
-#   labs(
-#     color = "Metal Group", 
-#     shape = "Metal Group"
-#   ) +
-#   theme(legend.position = "none")
 
 set.seed(42) # Ensure reproducible node placement
 fixed_layout <- create_layout(g, layout = "fr")
@@ -537,7 +536,8 @@ ggraph(fixed_layout) +
   )
 
 # Optional: Save the plot
-ggsave("R/graphs_R/Metal_Network.pdf", width = 8, height = 7)
+dev.off()
+ggsave("R/graphs_R/Metal_Network_21_25_thresh_75p.pdf", width = 8, height = 7)
 
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---
