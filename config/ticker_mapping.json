@@ -6,7 +6,11 @@
     "Price_LithiumAmericasCorp": "LILAMC",
     "Price_EastAsiaLithiumCarbonate": "LIEALC",
     "Price_EastAsiaLithiumCarbonateBatteryGrade": "LIEABG",
-    "Price_LithiumLME": "LILMEX"
+    "Price_LithiumLME": "LILMEX",
+    "Price_AntaikeLiCarbonate": "LIANTC",
+    "Price_AntaikeLiHydroxide": "LIANTH",
+    "Price_ICCSINOLiHydroxide": "LIICBG",
+    "Price_ICCSINOLiCarbonate": "LIICIN"
   },
   "nickel": {
     "Price_DailyMetal": "NIDALY",
