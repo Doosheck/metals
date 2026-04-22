@@ -434,4 +434,4 @@ print(dcc_lithium_cobalt_results$Cobalt$plot)
 ggsave("R/graphs_R/DCC_Lithium.pdf", plot = dcc_lithium_cobalt_results$Lithium$plot, width = 10, height = 6)
 ggsave("R/graphs_R/DCC_Cobalt.pdf",  plot = dcc_lithium_cobalt_results$Cobalt$plot,  width = 10, height = 6)
 
-# 
+
