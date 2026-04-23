@@ -289,7 +289,7 @@ run_metal_analysis <- function(metal_name, columns) {
 metal_configs <- list(
   "Cobalt" = c("COCOMX", "CODALY", "COLMEX", "COWUXI"),
   "Copper" = c( "CUCOMX", "CUDALY", "CULMEX", "CUSHFE"), 
-  "Lithium" = c("LICOMX", "LIDALY", "LILMEX", "LISAME"),
+  "Lithium" = c("LICOMX", "LIDALY", "LILMEX", "LIANTH"),
   "Nickel" = c("NIDALY", "NILMEX", "NISHFE", "NIWUXI")
 )
 
