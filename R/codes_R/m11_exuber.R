@@ -82,9 +82,9 @@ common_dates <- Reduce(intersect, map(list_filtered, ~ .x$Date)) %>% as.Date()
 # 4. Combine into the final data frame
 # This will now include ALL columns (series) from the surviving metals
 df_final <- list_filtered %>%
-  map(~ filter(.x, Date %in% common_dates)) %>%
-  reduce(full_join, by = "Date") %>%
-  arrange(Date)
+  purrr::map(~ filter(.x, Date %in% common_dates)) %>%
+  purrr::reduce(full_join, by = "Date") %>%
+  dplyr::arrange(Date)
 
 # --- 2.4. Final Verification ---
 
@@ -142,24 +142,24 @@ df_plot <- df_final %>%
 
 # --- 4.1. Matrix Preparation ---
 # exuber requires a numeric matrix. We log-transform prices here.
-data_matrix <- df_final %>%
-  select(-Date) %>%
+data_log_matrix <- df_final %>%
+  dplyr::select(-Date) %>%
   mutate(across(everything(), log)) %>%
   as.matrix()
 
 # Assign dates as character row names for tracking
-rownames(data_matrix) <- as.character(df_final$Date)
+rownames(data_log_matrix) <- as.character(df_final$Date)
 
 # --- 4.2. Run RADF Estimation ---
 # Note: This might take a moment depending on the number of series.
-est_results <- radf(data_matrix)
+est_results <- radf(data_log_matrix)
 
 # --- 4.3. Calculate Critical Values ---
 # Since we have a specific sample size (n), we generate Monte Carlo 
 # critical values to perform the statistical test.
 
 # for the first time calculate and save
-n_obs <- nrow(data_matrix)
+n_obs <- nrow(data_log_matrix)
 
 mc_cv <- here("R", "results_R",  "R_objects", "mc_cv.rds")
 
@@ -405,6 +405,11 @@ library(kableExtra)
 
 # 1. Compute log-returns (same transformation used for RADF)
 
+df_returns <- df_final %>%
+  dplyr::arrange(Date) %>% 
+  dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x))))%>% 
+  drop_na()
+
 df_desc <- df_returns %>%
   dplyr::select(-Date) %>%
   reframe(across(everything(), list(
@@ -445,7 +450,7 @@ library(ggplot2)
 
 # 1. Calculate the Pearson correlation matrix
 # 'use = "pairwise.complete.obs"' handles missing data appropriately
-cor_matrix <- cor(df_returns %>% select(-Date), use = "pairwise.complete.obs")
+cor_matrix <- cor(df_returns %>% dplyr::select(-Date), use = "pairwise.complete.obs")
 
 # 2. Convert correlation to Euclidean distance metric
 # Formula: d(x,y) = sqrt(2 * (1 - rho)). 
@@ -459,7 +464,7 @@ dist_matrix <- sqrt(2 * (1 - cor_matrix))
 weight_matrix <- 2 - dist_matrix
 
 # Optional: Thresholding to remove weak connections (noise)
-weight_matrix[weight_matrix < 0.6] <- 0 
+weight_matrix[weight_matrix < 0.65] <- 0 
 
 # 4. Build the undirected graph from the weight adjacency matrix
 g <- graph_from_adjacency_matrix(weight_matrix, mode = "undirected", weighted = TRUE, diag = FALSE)
