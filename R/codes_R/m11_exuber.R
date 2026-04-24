@@ -59,7 +59,7 @@ df_LI %>%
   labs(
     title = "",
     x = "Data",
-    y = "Wartoœæ",
+    y = "Wartoï¿½ï¿½",
     color = "Zmienna"
   )
 
@@ -211,8 +211,8 @@ is_positive_trend <- function(start_idx, end_idx, prices) {
 }
 
 # --- 5.2 Reusable dummy-builder ---
-# upward_only = FALSE  › marks ALL explosive episodes (up + down)
-# upward_only = TRUE   › marks only episodes with a positive OLS trend
+# upward_only = FALSE  ï¿½ marks ALL explosive episodes (up + down)
+# upward_only = TRUE   ï¿½ marks only episodes with a positive OLS trend
 build_bubble_dummies <- function(bubble_dates, df_prices, upward_only = FALSE) {
   series_names <- names(df_prices)[-1]
   
@@ -306,7 +306,7 @@ plot_bubbles <- function(df_dataset, rects, title = "") {
 # Upward-only bubbles (rects already filtered to upward in 5.4)
 plot_up <- plot_bubbles(df_final_dataset_up, bubble_rects, title = "")
 
-# All bubbles — need a separate rect table built from the UNFILTERED dates
+# All bubbles ï¿½ need a separate rect table built from the UNFILTERED dates
 bubble_rects_all <- imap_dfr(bubble_dates_raw, ~ {
   if (is.null(.x) || nrow(.x) == 0) return(tibble())
   tibble(
@@ -320,7 +320,7 @@ bubble_rects_all <- imap_dfr(bubble_dates_raw, ~ {
 
 plot_updown <- plot_bubbles(df_final_dataset_updown, bubble_rects_all, title = "")
 
-# Save — explicit width/height avoids 16-panel crowding
+# Save ï¿½ explicit width/height avoids 16-panel crowding
 ggsave(here("R/graphs_R", "bubbles_up_only.pdf"), plot_up, width = 14, height = 10)
 ggsave(here("R/graphs_R", "bubbles_up_and_down.pdf"), plot_updown, width = 14, height = 10)
 
@@ -426,6 +426,11 @@ library(knitr)
 library(kableExtra)
 
 # 1. Compute log-returns (same transformation used for RADF)
+df_returns <- df_final %>%
+  dplyr::arrange(Date) %>% 
+  dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x))))%>% 
+  drop_na()
+
 df_returns <- df_final %>%
   dplyr::arrange(Date) %>% 
   dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x))))%>% 
