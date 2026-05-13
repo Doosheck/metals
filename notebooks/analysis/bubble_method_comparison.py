@@ -1,9 +1,9 @@
 """
 Compare bubble detection methods across Cobalt, Copper, Lithium, and Nickel.
 
-- GSADF: binary labels from R (`exuber` / your GSADF pipeline) stored in `*_BD`
-  columns of `df_master.csv`. There is no drop-in Python equivalent to `exuber`;
-  this script reads the exported master file.
+- GSADF: binary labels from R (`exuber`). This script prefers **`df_master_gsadf.csv`**
+  (from `gsadf_exuber_master_prep.R`); otherwise it uses `*_BD` columns from `df_master.csv`.
+  There is no drop-in Python equivalent to `exuber`.
 
 - LPPLS: labels from `lppls_data_prep.ipynb` output (`df_master_lppls.csv` or
   `R/data_R/df_master_lppls.csv`).
@@ -11,6 +11,9 @@ Compare bubble detection methods across Cobalt, Copper, Lithium, and Nickel.
 - CUSUM: labels from `cusum_data_prep.ipynb` output (`df_master_cusum.csv`).
 
 Paths are resolved relative to this file; several common locations are tried.
+
+**Notebook:** `notebooks/analysis/bubble_method_comparison.ipynb` loads this module and calls
+`run_comparison()` (Jupyter cannot use ``argparse`` the same way as ``python bubble_method_comparison.py``).
 
 Usage (from repo root or this directory):
 
@@ -43,6 +46,7 @@ METAL_PRICE_COL = {
     "Lithium": "LIDALY",
     "Nickel": "NIDALY",
 }
+
 
 
 def _script_dir() -> Path:
@@ -87,6 +91,7 @@ def bubble_precision_recall(pred: np.ndarray, ref: np.ndarray) -> tuple[float, f
     prec = float(tp / pred.sum()) if pred.sum() > 0 else np.nan
     rec = float(tp / ref.sum()) if ref.sum() > 0 else np.nan
     return prec, rec
+
 
 
 def cusum_bubble_detector(
@@ -135,14 +140,26 @@ def smooth_bubble_labels(
     return result
 
 
-def trend_filter_prices(raw: np.ndarray, prices: np.ndarray, lag: int = 5) -> np.ndarray:
-    """Keep bubble only if price[t] > price[t - lag] (R / notebook pipeline)."""
-    out = raw.astype(int).copy()
-    for i in range(len(out)):
-        if out[i] == 1 and i >= lag:
-            if prices[i] <= prices[i - lag]:
-                out[i] = 0
-    return out
+
+def trend_filter_ols_window(raw: np.ndarray, prices: np.ndarray, lag: int = 5) -> np.ndarray:
+    """Same as lppls_data_prep / cusum_data_prep: OLS slope > 0 on price levels over [t-lag, …, t]."""
+    raw = np.asarray(raw, dtype=int).copy()
+    prices = np.asarray(prices, dtype=float)
+    for i in range(len(raw)):
+        if raw[i] != 1:
+            continue
+        if i < lag:
+            raw[i] = 0
+            continue
+        seg = prices[i - lag : i + 1]
+        if len(seg) < 3 or np.nanstd(seg) == 0:
+            raw[i] = 0
+            continue
+        x = np.arange(len(seg), dtype=float)
+        slope = np.polyfit(x, seg, 1)[0]
+        if not np.isfinite(slope) or slope <= 0:
+            raw[i] = 0
+    return raw
 
 
 def compute_cusum_flags(df: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -160,7 +177,7 @@ def compute_cusum_flags(df: pd.DataFrame) -> dict[str, np.ndarray]:
         cs_long = cusum_bubble_detector(log_p, window=WINDOW_LONG, threshold_sigma=THRESHOLD_SIGMA)
         union = ((cs_short == 1) | (cs_long == 1)).astype(int)
         smoothed = smooth_bubble_labels(union, min_gap=MIN_GAP, min_duration=MIN_DURATION)
-        out[metal] = trend_filter_prices(smoothed, prices, lag=5)
+        out[metal] = trend_filter_ols_window(smoothed, prices, lag=5)
     return out
 
 
@@ -179,6 +196,7 @@ def align_three_masters(
     )[["Date"] + [f"{c}_BD_cusum" for c in METAL_PRICE_COL.values()]]
     m = a.merge(b, on="Date", how="inner").merge(c, on="Date", how="inner")
     return m.sort_values("Date").reset_index(drop=True)
+
 
 
 def plot_timeline_raster(df: pd.DataFrame, out_path: Path) -> None:
@@ -223,27 +241,28 @@ def plot_jaccard_heatmap(pairwise: pd.DataFrame, out_path: Path) -> None:
     plt.close(fig)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Compare GSADF vs LPPLS vs CUSUM bubble labels.")
-    parser.add_argument(
-        "--recompute-cusum",
-        action="store_true",
-        help="Ignore CUSUM CSV and recompute from prices in the GSADF master.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="",
-        help="Directory for figures/CSVs (default: ../../outputs next to R/).",
-    )
-    args = parser.parse_args()
+def run_comparison(
+    recompute_cusum: bool = False,
+    output_dir: str | Path | None = None,
+) -> dict:
+    """
+    Load GSADF / LPPLS / CUSUM masters, align on Date, write CSVs + figures under `outputs/`.
 
+    Returns a dict with keys: ``prevalence``, ``pairwise``, ``kappa`` (optional), ``merged``, ``out_dir``, ``paths``.
+    Use from a Jupyter notebook instead of ``main()`` (argparse breaks in notebooks).
+    """
     p_gsadf = _first_existing(
-        ["R/df_master.csv", "R/data_R/df_master.csv", "metals/R/df_master.csv"]
+        [
+            "R/df_master_gsadf.csv",
+            "R/data_R/df_master_gsadf.csv",
+            "R/data_R/df_master.csv",
+            "R/df_master.csv",
+            "metals/R/df_master.csv",
+        ]
     )
     if p_gsadf is None:
         raise FileNotFoundError(
-            "Could not find df_master.csv. Expected under R/ or R/data_R/ relative to repo root."
+            "Could not find a GSADF master. Tried df_master_gsadf.csv then df_master.csv under R/ or R/data_R/."
         )
 
     p_lppls = _first_existing(
@@ -261,12 +280,12 @@ def main() -> None:
         )
     df_l = read_master_csv(p_lppls)
 
-    if args.recompute_cusum or p_cusum is None:
+    if recompute_cusum or p_cusum is None:
         cusum_by_metal = compute_cusum_flags(df_g)
         df_c = df_g.copy()
         for metal, col in METAL_PRICE_COL.items():
             df_c[f"{col}_BD"] = cusum_by_metal[metal]
-        if p_cusum is None and not args.recompute_cusum:
+        if p_cusum is None and not recompute_cusum:
             print("Note: df_master_cusum.csv not found — recomputing CUSUM from prices.")
     else:
         df_c = read_master_csv(p_cusum)
@@ -275,13 +294,9 @@ def main() -> None:
     print(f"Aligned panel: {len(df)} rows, {df['Date'].min().date()} — {df['Date'].max().date()}")
     print(f"GSADF master: {p_gsadf}")
     print(f"LPPLS master: {p_lppls}")
-    print(f"CUSUM source: {'recomputed' if args.recompute_cusum or p_cusum is None else p_cusum}")
+    print(f"CUSUM source: {'recomputed' if recompute_cusum or p_cusum is None else p_cusum}")
 
-    out_dir = (
-        Path(args.output_dir)
-        if args.output_dir
-        else _script_dir().parents[2] / "outputs"
-    )
+    out_dir = Path(output_dir) if output_dir else _script_dir().parents[2] / "outputs"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows_prev = []
@@ -294,7 +309,6 @@ def main() -> None:
         g = df[f"{col}_BD_gsadf"].values.astype(int)
         l = df[f"{col}_BD_lppls"].values.astype(int)
         c = df[f"{col}_BD_cusum"].values.astype(int)
-        n = len(df)
         for name, x in [("GSADF", g), ("LPPLS", l), ("CUSUM", c)]:
             rows_prev.append(
                 {"metal": metal, "method": name, "bubble_days": int(x.sum()), "pct": 100.0 * x.mean()}
@@ -327,6 +341,7 @@ def main() -> None:
     print(f"Wrote {prev_path}")
     print(f"Wrote {pair_path}")
 
+    kdf = None
     if cohen_kappa_score is None:
         print("Install scikit-learn for Cohen's kappa in pairwise export.")
     else:
@@ -335,7 +350,6 @@ def main() -> None:
         kdf.to_csv(kp, index=False)
         print(f"Wrote {kp}")
 
-    # Three-way counts per metal
     for metal, col in METAL_PRICE_COL.items():
         s = (
             df[f"{col}_BD_gsadf"].values.astype(int)
@@ -346,16 +360,49 @@ def main() -> None:
         print(f"\n{metal} — count of methods flagging bubble (0..3):\n{counts.to_string()}")
 
     j_only = pair_df[pair_df["pair"].str.contains("–")].copy()
-    plot_jaccard_heatmap(j_only, out_dir / "bubble_methods_jaccard_heatmap.png")
-    plot_timeline_raster(df, out_dir / "bubble_methods_timeline_raster.png")
+    heatmap_path = out_dir / "bubble_methods_jaccard_heatmap.png"
+    raster_path = out_dir / "bubble_methods_timeline_raster.png"
+    plot_jaccard_heatmap(j_only, heatmap_path)
+    plot_timeline_raster(df, raster_path)
     print(f"Figures saved under {out_dir}")
 
     print(
-        "\nR (GSADF via exuber): keep your existing script that writes `df_master.csv` "
-        "with `CODALY_BD`, `CUDALY_BD`, `LIDALY_BD`, `NIDALY_BD` so this comparison stays "
-        "consistent with notebooks/analysis/lppls_data_prep.ipynb and cusum_data_prep.ipynb."
+        "\nR (GSADF via exuber): use `gsadf_exuber_master_prep.R` / `df_master_gsadf.csv` so this comparison "
+        "stays consistent with lppls_data_prep.ipynb and cusum_data_prep.ipynb."
     )
+
+    return {
+        "prevalence": prev_df,
+        "pairwise": pair_df,
+        "kappa": kdf,
+        "merged": df,
+        "out_dir": out_dir,
+        "paths": {
+            "prevalence_csv": prev_path,
+            "pairwise_csv": pair_path,
+            "heatmap_png": heatmap_path,
+            "raster_png": raster_path,
+        },
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Compare GSADF vs LPPLS vs CUSUM bubble labels.")
+    parser.add_argument(
+        "--recompute-cusum",
+        action="store_true",
+        help="Ignore CUSUM CSV and recompute from prices in the GSADF master.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="",
+        help="Directory for figures/CSVs (default: ../../outputs next to R/).",
+    )
+    args = parser.parse_args()
+    run_comparison(recompute_cusum=args.recompute_cusum, output_dir=args.output_dir or None)
 
 
 if __name__ == "__main__":
     main()
+
