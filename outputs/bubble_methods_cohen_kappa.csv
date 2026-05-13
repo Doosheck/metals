@@ -1,0 +1,13 @@
+metal,pair,cohen_kappa
+Cobalt,gsadf–lppls,0.055985457666915095
+Cobalt,gsadf–cusum,0.25885523665357146
+Cobalt,lppls–cusum,0.2149293698193252
+Copper,gsadf–lppls,0.11234747908832776
+Copper,gsadf–cusum,0.16695083336232996
+Copper,lppls–cusum,0.10020191166148174
+Lithium,gsadf–lppls,0.04303165235419537
+Lithium,gsadf–cusum,0.40411820973669643
+Lithium,lppls–cusum,0.10133630289532303
+Nickel,gsadf–lppls,-0.006639304683727865
+Nickel,gsadf–cusum,0.12795949588402422
+Nickel,lppls–cusum,0.057031144667655465

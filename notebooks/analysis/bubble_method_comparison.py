@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -199,6 +200,90 @@ def align_three_masters(
 
 
 
+# Same colours for a method in every metal (bars = contiguous bubble days)
+METHOD_BAR_COLORS = {"GSADF": "#0072B2", "LPPLS": "#009E73", "CUSUM": "#E69F00"}
+
+
+def _bubble_run_xranges(mask: np.ndarray, dn: np.ndarray, day_w: float) -> list[tuple[float, float]]:
+    """Return ``broken_barh`` spans ``(x0, width)`` in matplotlib date units for runs of 1s."""
+    n = len(mask)
+    if n == 0:
+        return []
+    ranges: list[tuple[float, float]] = []
+    i = 0
+    while i < n:
+        if not mask[i]:
+            i += 1
+            continue
+        j = i + 1
+        while j < n and mask[j]:
+            j += 1
+        x0 = float(dn[i] - 0.5 * day_w)
+        w = float(dn[j - 1] - dn[i] + day_w)
+        ranges.append((x0, w))
+        i = j
+    return ranges
+
+
+def plot_method_overlap_timeline(df: pd.DataFrame, out_path: Path) -> None:
+    """
+    For each metal: three horizontal tracks (GSADF, LPPLS, CUSUM) with horizontal bars
+    marking contiguous bubble episodes. Colours are fixed per method across metals.
+    """
+    dates = pd.to_datetime(df["Date"])
+    dn = mdates.date2num(dates)
+    if len(dn) > 1:
+        day_w = float((dn[-1] - dn[0]) / (len(dn) - 1))
+    else:
+        day_w = 1.0
+
+    bar_h = 0.68
+    rows = [
+        ("CUSUM", "cusum", 0.0),
+        ("LPPLS", "lppls", 1.0),
+        ("GSADF", "gsadf", 2.0),
+    ]
+
+    fig, axes = plt.subplots(len(METAL_PRICE_COL), 1, figsize=(14, 10), sharex=True)
+    if len(METAL_PRICE_COL) == 1:
+        axes = [axes]
+
+    for ax, (metal, col) in zip(axes, METAL_PRICE_COL.items()):
+        for label, suffix, y0 in rows:
+            mask = df[f"{col}_BD_{suffix}"].values.astype(bool)
+            xr = _bubble_run_xranges(mask, dn, day_w)
+            if xr:
+                ax.broken_barh(
+                    xr,
+                    (y0, bar_h),
+                    facecolors=METHOD_BAR_COLORS[label],
+                    edgecolors="none",
+                )
+        ax.set_ylim(-0.15, 2.0 + bar_h + 0.15)
+        ax.set_yticks([y0 + 0.5 * bar_h for _, _, y0 in rows])
+        ax.set_yticklabels([r[0] for r in rows], fontsize=9)
+        ax.set_ylabel(metal, rotation=0, ha="right", va="center", fontsize=10, labelpad=40)
+        ax.tick_params(axis="x", labelbottom=True)
+        ax.set_facecolor("#f7f7f7")
+
+    axes[-1].xaxis_date()
+    axes[-1].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    axes[-1].xaxis.set_major_locator(mdates.AutoDateLocator())
+    fig.autofmt_xdate(rotation=25)
+    axes[-1].set_xlabel("Date")
+
+    handles = [
+        plt.Rectangle((0, 0), 1, 1, facecolor=METHOD_BAR_COLORS[k], edgecolor="none")
+        for k in ("GSADF", "LPPLS", "CUSUM")
+    ]
+    fig.legend(handles, list(METHOD_BAR_COLORS.keys()), loc="upper right", fontsize=9, frameon=True)
+    fig.suptitle("Bubble episodes by method (three rows per metal)", fontsize=12, y=0.995)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.96)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_timeline_raster(df: pd.DataFrame, out_path: Path) -> None:
     """Three-row stripe per metal: GSADF, LPPLS, CUSUM."""
     dates = df["Date"].values
@@ -246,7 +331,8 @@ def run_comparison(
     output_dir: str | Path | None = None,
 ) -> dict:
     """
-    Load GSADF / LPPLS / CUSUM masters, align on Date, write CSVs + figures under `outputs/`.
+    Load GSADF / LPPLS / CUSUM masters, align on Date, write CSVs + figures under ``<repo>/outputs/``
+    (the ``metals`` folder that contains ``R/`` and ``notebooks/``).
 
     Returns a dict with keys: ``prevalence``, ``pairwise``, ``kappa`` (optional), ``merged``, ``out_dir``, ``paths``.
     Use from a Jupyter notebook instead of ``main()`` (argparse breaks in notebooks).
@@ -296,7 +382,9 @@ def run_comparison(
     print(f"LPPLS master: {p_lppls}")
     print(f"CUSUM source: {'recomputed' if recompute_cusum or p_cusum is None else p_cusum}")
 
-    out_dir = Path(output_dir) if output_dir else _script_dir().parents[2] / "outputs"
+    # Repo root = …/metals (parent of notebooks/). Use metals/outputs, not a folder above the repo.
+    out_dir = Path(output_dir) if output_dir else _script_dir().parents[1] / "outputs"
+    out_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows_prev = []
@@ -362,9 +450,17 @@ def run_comparison(
     j_only = pair_df[pair_df["pair"].str.contains("–")].copy()
     heatmap_path = out_dir / "bubble_methods_jaccard_heatmap.png"
     raster_path = out_dir / "bubble_methods_timeline_raster.png"
+    overlap_path = out_dir / "bubble_methods_overlap_timeline.png"
     plot_jaccard_heatmap(j_only, heatmap_path)
     plot_timeline_raster(df, raster_path)
+    plot_method_overlap_timeline(df, overlap_path)
     print(f"Figures saved under {out_dir}")
+    for label, p in [
+        ("heatmap", heatmap_path),
+        ("timeline_raster", raster_path),
+        ("overlap_timeline", overlap_path),
+    ]:
+        print(f"  {label}: {p.resolve()}")
 
     print(
         "\nR (GSADF via exuber): use `gsadf_exuber_master_prep.R` / `df_master_gsadf.csv` so this comparison "
@@ -382,6 +478,7 @@ def run_comparison(
             "pairwise_csv": pair_path,
             "heatmap_png": heatmap_path,
             "raster_png": raster_path,
+            "overlap_timeline_png": overlap_path,
         },
     }
 
@@ -397,7 +494,7 @@ def main() -> None:
         "--output-dir",
         type=str,
         default="",
-        help="Directory for figures/CSVs (default: ../../outputs next to R/).",
+        help="Directory for figures/CSVs (default: <repo>/outputs, i.e. metals/outputs).",
     )
     args = parser.parse_args()
     run_comparison(recompute_cusum=args.recompute_cusum, output_dir=args.output_dir or None)
