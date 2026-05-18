@@ -1,0 +1,34 @@
+\begin{table}[!h]
+\centering
+\caption{\label{tab:tab:johansen}Results of the Johansen Cointegration Tests}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{2.5cm}ccccc>{\centering\arraybackslash}p{2.2cm}>{\centering\arraybackslash}p{2.2cm}}
+\toprule
+\multicolumn{2}{c}{ } & \multicolumn{4}{c}{Trace Statistics} & \multicolumn{1}{c}{Max $alpha$} & \multicolumn{1}{c}{Min $alpha$} \\
+\cmidrule(l{3pt}r{3pt}){3-6} \cmidrule(l{3pt}r{3pt}){7-7} \cmidrule(l{3pt}r{3pt}){8-8}
+Metal & $r$ & r=0 & r???1 & r???2 & r???3 & Follower & Leader\\
+\midrule
+\addlinespace[0.3em]
+\multicolumn{8}{l}{\textbf{Raw series}}\\
+\textbf{COBALT} & 2 & 74.45*** & 37.76** & 19.10* &  & -0.169 & -0.002\\
+\textbf{} &  &  &  &  &  & CODALY & \vphantom{1} COCOMX\\
+\textbf{COPPER} & 1 & 209.65*** & 14.49 &  &  & 0.313 & 0.008\\
+\textbf{} &  &  &  &  &  & CUDALY & \vphantom{1} CUSHFE\\
+\textbf{LITHIUM} & 3 & 174.19*** & 102.34*** & 42.29*** & 0.71 & -0.154 & 0.017\\
+\textbf{} &  &  &  &  &  & LICOMX & \vphantom{1} LIDALY\\
+\textbf{NICKEL} & 3 & 129.82*** & 66.53*** & 24.25** & 1.91 & -0.098 & 0.001\\
+\textbf{} &  &  &  &  &  & NILMEX & \vphantom{1} NISHFE\\
+\addlinespace[0.3em]
+\multicolumn{8}{l}{\textbf{Filtered}}\\
+\textbf{COBALT\_F} & 2 & 75.65*** & 40.49** & 19.49* &  & -0.244 & -0.034\\
+\textbf{} &  &  &  &  &  & CODALY & COCOMX\\
+\textbf{COPPER\_F} & 1 & 213.94*** & 18.26 &  &  & 0.309 & 0.004\\
+\textbf{} &  &  &  &  &  & CUDALY & CUSHFE\\
+\textbf{LITHIUM\_F} & 3 & 167.54*** & 97.97*** & 41.40*** & 3.43 & -0.159 & 0.012\\
+\textbf{} &  &  &  &  &  & LICOMX & LIDALY\\
+\textbf{NICKEL\_F} & 3 & 302.28*** & 74.20*** & 31.73*** & 3.77 & -0.334 & 0.076\\
+\textbf{} &  &  &  &  &  & NILMEX & NISHFE\\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -92,8 +92,12 @@ library(kableExtra)
 #                        guess_max = 10000)
 
 #file with df_final_dataset_up: "R/results_R", "series_and_bubble_up_down.csv")
-df_final <- df_final_dataset_up[1:17]
-df_dummies <- df_final_dataset_up[c(1, 18:33)]
+#W artykule s¹ bubbles_up
+df_final <- read.csv2("R/results_R/series_and_bubble_up.csv")
+df_final$Date <- as.Date(df_final$Date, format="%Y-%m-%d")
+df_dummies <- df_final[c(1, 18:33)]
+df_final <- df_final[1:17]           
+
 
 # --- Function to Run Analysis ---
 run_metal_analysis <- function(metal_name, columns) {
@@ -428,9 +432,12 @@ extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
   result$Leader <- leader_name
   
   result
+  
+  return(result)
 }
 
-#extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
+#SKIP now
+extract_full_results <- function(metal_name, jo_obj, model_name, price_data) {
   
   if (is.null(jo_obj)) {
     return(NULL)
@@ -582,7 +589,7 @@ latex_table_data <- bind_rows(raw_data, filtered_data)
   } else {
     basic_row
   }
-})
+
 
 # --- Display preview ---
 print(latex_table_data)
@@ -709,3 +716,11 @@ latex_output_final <- final_table %>%
 
 cat(latex_output_final)
 
+#save to tex R/tables
+writeLines(as.character(latex_output_final), "R/tables/johansen_results.tex")
+
+# save to csv R/tables
+write.csv2(latex_table_data, "R/tables/johansen_results.csv", row.names = FALSE)
+
+# (Opcjonalnie) Jeœli wolisz mieæ w Excelu uk³ad z pustymi wierszami pod nazwy Leader/Follower, odkomentuj poni¿sz¹ liniê:
+# write.csv2(final_table, "gotowa_tabela_johansen_przeplatana.csv", row.names = FALSE)
