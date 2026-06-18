@@ -1,0 +1,441 @@
+%robustness without ETh amd BTC
+%TCIvol vs TCIliq
+%robustness check!
+\documentclass{beamer}
+\usetheme{Madrid} % A common theme, you can change this (e.g., Warsaw, Boadilla, AnnArbor)
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\RequirePackage{amsthm, amsmath, amsfonts,amssymb}
+%\usepackage{amsmath}
+\usepackage{natbib}
+\bibliographystyle{abbrvnat}
+\usepackage{booktabs} % For nice tables
+\usepackage{graphicx} % For images
+\usepackage{subfigure}
+\usepackage{appendixnumberbeamer}
+\RequirePackage{latexsym}
+
+
+\title[Bubbles in Metal Prices]{The Fossil-Fuel Dependency of the Green
+Transition}
+\author[Będowska-Sójka \and  Kasperek]{Barbara Będowska-Sójka \inst{1} \and Michał Kasperek \inst{2}}
+\institute[PUEB, TUM]{
+  \inst{1} Poznań University of Economics and Business, Poland; \\
+  \inst{2} Siemens Financial Services, Munich, Germany
+  }
+
+\date{EcoMod Luxembourg, 8-10.07.2026}
+
+%\date{May 2025} % You can change this
+
+% Suppress navigation symbols if slides are too crowded
+% \setbeamertemplate{navigation symbols}{}
+
+\begin{document}
+
+% --- Title Slide ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline Slide ---
+\begin{frame}
+  \frametitle{Outline}
+  \tableofcontents
+\end{frame}
+
+\begin{frame}
+\frametitle{Acknowledgment}
+This work is supported by the Polish National Science Centre through the project \textit{Metals}, no. 2021/41/B/HS4/02443. \\
+
+We also acknowledge the support of the Marie
+Skłodowska-Curie Actions under the European Union’s Horizon Europe research and innovation programme for the
+Industrial Doctoral Network on Digital Finance (acronym: DIGITAL), Project No. 101119635.
+\end{frame}
+
+% --- Abstract as Motivation/Overview ---
+\section{Overview}
+\begin{frame}[fragile]
+  \frametitle{Study Overview}
+  \begin{itemize}
+    \item 
+    \begin{itemize}
+        
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+
+
+
+% --- Section 1: Introduction ---
+\section{Introduction}
+
+\begin{frame}{Overview of the study}
+    The global transition to a low-carbon economy paradoxically relies on fossil-fuel-intensive extraction of critical metals. To address mixed evidence on energy-metal dependencies, \textbf{this study employs a novel hybrid framework integrating Random Forest classification with Shapley Additive Explanations (SHAP) to decode the non-linear drivers of price exuberance in cobalt, copper, lithium, and nickel.} 
+    
+    We find that speculative bubbles in cobalt and lithium are primarily driven by shifts of capital during broad equity market downturns, supporting a green safe-haven hypothesis. Conversely, nickel is dominated by self-referential momentum, while copper remains anchored to the US Dollar and industrial demand. Crucially, we identify a structural energy-metal nexus where high oil prices actively support speculative regimes in battery metals. These findings demonstrate that green metal markets are not solely driven by physical scarcity but are deeply financialised assets sensitive to global liquidity and fossil fuel costs, offering critical insights for risk management during the energy transition.
+\end{frame}
+
+
+
+
+
+
+
+
+\begin{frame}[fragile]
+  \frametitle{Methodology}
+
+\end{frame}
+
+\begin{frame}{Methodology: The GSADF}
+
+The Recursive Augmented Dickey-Fuller Test is used for:
+\begin{itemize}
+    \item the detection of the \textit{explosive} behaviour - while 
+    standard ADF checks if prices tend to return to a mean, the RADF (Bubble Test) flips this logic and checks the right tail of the distribution. It asks: \textit{Is the price growing at an explosive rate (exponentially or faster) right now}?
+    \item catching bubbles that collapse (the \textbf{recursive} part);
+    \item obtaining \textbf{date stamp} of the bubble (start \& end dates);
+    \item Supremum ADF (SADF) \citep{Phillips2011} and Generalised SADF GSADF \citep{Phillips2015}.
+\end{itemize}
+ 
+ 
+
+ %Jacobs Fantazzini
+\end{frame}
+
+\begin{frame}
+\frametitle{Hypothesis Testing Framework - From Stationarity to Explosiveness}
+
+    The core of bubble detection lies in testing the autoregressive coefficient $\delta$ in the following model (random walk with drift):
+    \begin{equation*}
+    y_t =  \mu + \rho y_{t-1} + \varepsilon_t  \quad /-y_{t-1}
+     \end{equation*}
+      \begin{equation*}
+    \Delta y_t = \mu + \delta y_{t-1} + \varepsilon_t, \quad \varepsilon_t \sim N(0, \sigma^2), \quad \delta = \rho - 1
+    \end{equation*}
+
+    %\vspace{0.5cm}
+
+    \begin{columns}[t]
+        % Kolumna 1: Standardowy ADF
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Standard ADF (Left-Tailed)}
+                Used to test for \textbf{Unit root}.
+                \begin{itemize}
+                    \item $H_0: \delta = 0$ (Random Walk)
+                    \item $H_1: \delta < 0$ (Mean Reversion)
+                \end{itemize}
+                \vspace{0.2cm}
+                \footnotesize{Focus: Does the price return to the mean?}
+            \end{block}
+        \end{column}
+
+        % Kolumna 2: Test na bańki (RT-ADF)
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\alert{Bubble Test (Right-Tailed)}}
+                Used to test for \textbf{Exuberance}.
+                \begin{itemize}
+                    \item $H_0: \delta = 0$ (Random Walk)
+                    \item \textbf{$H_1: \delta > 0$ (Explosive)}
+                \end{itemize}
+                \vspace{0.2cm}
+                \footnotesize{Focus: Is the price growing exponentially?}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{0.5cm}
+    \centering
+    For exuberance, if the test statistic exceeds the critical value, we reject $H_0$ in favour of explosive behaviour.
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Methodological Comparison of SADF vs. GSADF \citep{Phillips2015}}
+
+    %Why do we need the Generalised (GSADF) approach?
+
+    \begin{table}
+        \centering
+        \renewcommand{\arraystretch}{1.5}
+        \begin{tabular}{p{2cm} p{4.3cm} p{4.8cm}}
+            \toprule
+            \textbf{Feature} & \textbf{SADF (2011)} & \textbf{GSADF (2015)} \\
+            \midrule
+            \textbf{Windowing} & {Expanding Window} \newline Fixed start point $r_1 = 0$ & \textbf{Flexible Window} \newline Variable start point $r_1 \in [0, r_2]$ \\
+            
+            \textbf{Detection Scope} & Best for \textbf{single} bubble episodes. & Capable of detecting \textbf{multiple} bubbles. \\
+            
+            \textbf{Weakness} & \textit{'Swamping effect'}: Past volatility (crashes) can mask new bubbles. & More robust. It can 'forget' old crashes to detect new growth. \\
+            
+            \textbf{Use Case} & Simple, short time series. & Long history with cyclical volatility. \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+\end{frame}
+
+
+
+\begin{frame}
+\frametitle{GSADF: A Window Selection Mechanism}
+   Unlike the standard SADF test (which fixes the start date), the \textbf{GSADF} test performs an exhaustive search over all feasible subsamples.
+    
+    \vspace{0.3cm}
+
+    \begin{block}{1. The 'Double Recursion' Process}
+        The algorithm tests random walk in windows defined by a start point ($r_1$) and an end point ($r_2$). Both the window and the starting point move forward. 
+    \end{block}
+
+    \begin{block}{2. The Minimum Window Constraint ($r_0$)}
+        To ensure statistical validity, a window cannot be infinitely small. The minimum window size $r_0$ is calculated automatically:
+        \begin{equation*}
+            r_0 = 0.01 + \frac{1.8}{\sqrt{T}}
+        \end{equation*}
+        \footnotesize{Example: For $T = 1000$ observations, the minimum window is $\approx 67$ days. Any period shorter than this is skipped.}
+    \end{block}
+
+\end{frame}
+
+\begin{frame}{Robustness check methods: LPPLS and CUMSUM}
+  \frametitle{Log-Periodic Power Law Singularity LPPLS approach}
+The \textbf{LPPLS model} of Johansen-Ledoit-Sornette \citep{sornette2003why} describes financial bubbles as a transition from normal growth to a \textbf{Finite-Time Singularity (FTS)}.
+    
+    \vspace{0.3cm}
+    \begin{itemize}
+        \item \textbf{Super-exponential growth:} Prices rise faster than a standard exponential curve.
+        \item \textbf{Positive feedback:} Driven by herding behaviour and imitation among market participants.
+        \item \textbf{Log-periodic oscillations:} Representing accelerating volatility and hierarchical market corrections as the system approaches criticality.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The Fundamental Equation}
+    The expected value of the log-price $y(t) = \ln p(t)$ is modeled as:
+
+    \begin{equation*}
+        y(t) = A + B(t_c - t)^m + C(t_c - t)^m \cos(\omega \ln(t_c - t) - \phi)
+    \end{equation*}
+
+    \vspace{0.4cm}
+    Where:
+    \begin{itemize}
+        \item \textbf{$A > 0$}: The log-price at the critical time $t_c$.
+        \item \textbf{$B < 0$}: The magnitude of the power-law growth (for a positive bubble).
+        \item \textbf{$C$}: The amplitude of the log-periodic oscillations.
+        \item \textbf{$t_c$}: The \textbf{Critical Time} (theoretical crash or regime change date).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Key Parameters and Constraints}
+    To identify a statistically valid bubble, the following parameters are estimated via non-linear optimization:
+
+    \begin{block}{The Non-Linear Parameters}
+        \begin{itemize}
+            \item \textbf{$m \in (0, 1)$}: The power-law exponent. Describes the acceleration of the trend.
+            \item \textbf{$\omega$}: The angular frequency of log-periodic oscillations. Reflects the frequency of 'booms and busts'.
+            \item \textbf{$\phi$}: Phase shift, $0 \leq \phi \leq 2\pi$.
+        \end{itemize}
+    \end{block}
+
+    \begin{block}{Physical Consistency Conditions}
+        A fit is generally considered a bubble if:
+        \begin{itemize}
+            \item $0.1 \leq m \leq 0.9$
+            \item $6 \leq \omega \leq 13$
+            \item $|C|/|B| < 1$ (Oscillations must be smaller than the main trend).
+        \end{itemize}
+    \end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Calibration: The Slaving Procedure}
+    The calibration of LPPLS is numerically challenging due to its non-linear nature.
+    
+    \vspace{0.3cm}
+    \textbf{Three-Step Regularization:}
+    \begin{enumerate}
+        \item \textbf{Linear Slaving:} Parameters $\{A, B, C\}$ are 'slaved' to non-linear parameters $\{t_c, m, \omega, \phi\}$ via Ordinary Least Squares (OLS).
+        \item \textbf{Heuristic Search:} Use of Genetic Algorithms or Nelder-Mead to explore the non-linear search space.
+        \item \textbf{Confidence Indicator:} The ratio of successful fits across multiple time-windows that satisfy the physical constraints.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Empirical Implementation: Rolling Windows}
+    To capture the dynamic nature of bubbles, the LPPLS model is fitted using a \textbf{nested rolling-window} approach.
+
+    \vspace{0.3cm}
+    \begin{block}{Window Specifications}
+        \begin{itemize}
+            \item \textbf{Outer Window ($120$ days):} Defines the maximum look-back period for a given day $t$.
+            \item \textbf{Inner Window ($30$ days):} The minimum length required to fit the 7 parameters.
+            \item \textbf{Increment ($1$ day):} Fits are computed daily to maximize precision, yielding hundreds of fits per day $t$.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    The \textbf{Positive Confidence Indicator} is calculated as the fraction of these nested windows whose estimated parameters satisfy the physical consistency conditions.
+\end{frame}
+
+\begin{frame}
+\frametitle{Bubble Identification and Filtering}
+    A theoretical fit only translates to a "Bubble Day" (BD) if it passes strict empirical filters.
+
+    \vspace{0.3cm}
+    \begin{itemize}
+        \item \textbf{Confidence Threshold:} A day is flagged if the positive confidence indicator exceeds $30\%$ ($\text{Threshold} = 0.3$). This is deliberately conservative due to the naturally sparse nature of valid LPPLS fits.
+        \item \textbf{Trend Filter:} A secondary check is applied requiring the OLS slope of price levels over the preceding 5 days to be strictly positive.
+        \item \textbf{Temporal Smoothing:} Confidence indicators are forward-filled over short gaps ($\le 5$ days) to bridge minor algorithmic non-convergences.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{CUMSUM -- Monitoring for Regime Shifts}
+    The \textbf{CUMSUM (Cumulative Sum)} method, often used in change-point detection, serves as a recursive tool to monitor structural breaks in price dynamics.
+    
+    \vspace{0.3cm}
+    \textbf{The Monitoring Statistic:}
+    In the framework of \citep{homm2012testing}, the CUMSUM test for explosive behavior is defined as:
+    
+    \begin{equation}
+        W_t = \frac{1}{\hat{\sigma} \sqrt{T}} \sum_{i=1}^{t} \Delta y_i
+    \end{equation}
+    
+    \textbf{Where:}
+    \begin{itemize}
+        \item $y_i$: The log-price of the metal at time $i$.
+        \item $\Delta y_i$: The first difference of the log-price.
+        \item $\hat{\sigma}$: The estimated standard deviation of the residuals.
+        \item $T$: The total number of observations in the sample.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{CUMSUM: Detection and Identification}
+    \begin{block}{Hypothesis Testing}
+        \begin{itemize}
+            \item \textbf{$H_0$}: The series follows a random walk (no bubble).
+            \item \textbf{$H_1$}: There is a structural break leading to an explosive regime.
+        \end{itemize}
+    \end{block}
+
+    \textbf{Key Features for Metal Markets:}
+    \begin{itemize}
+        \item \textbf{Directional Sensitivity:} Specifically designed to detect shifts in the mean of returns that signify the onset of a bubble.
+        \item \textbf{Break-Point Estimation:} Excellent at identifying the exact date a regime shift occurs, though it may have lower power than GSADF in detecting ongoing explosive growth.
+        \item \textbf{Thresholds:} Critical values are determined by the boundary of a Brownian motion process.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Empirical Implementation: Multi-Scale Rolling Windows}
+    To capture both transient spikes and sustained bubbles, the CUSUM statistic is computed sequentially over rolling windows.
+
+    \vspace{0.3cm}
+    \begin{block}{The Multi-Scale Approach}
+        \begin{itemize}
+            \item \textbf{Short Window ($w = 60$ days):} Highly sensitive. Designed to catch short, sharp explosive episodes in metal prices.
+            \item \textbf{Long Window ($w = 120$ days):} Evaluates broader trends, capturing sustained exponential phases.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.2cm}
+    \textbf{Detection Protocol:}\\
+    A bubble regime is flagged when the local CUSUM statistic exceeds the critical threshold of $\theta = 2.0$ standard deviations on either scale.
+\end{frame}
+
+\begin{frame}
+\frametitle{Post-Processing and Structural Integrity}
+    Raw statistical flags often suffer from high-frequency noise. A secondary filtering process ensures structural integrity:
+
+    \vspace{0.3cm}
+    \begin{enumerate}
+        \item \textbf{Temporal Smoothing:} Gaps of $\le 5$ days between flagged periods are bridged to account for minor market corrections within a larger bubble regime.
+        \item \textbf{Duration Filter:} Isolated explosive episodes shorter than 10 days are removed to exclude short-term liquidity shocks.
+        \item \textbf{Trend Validation:} Final regimes are cross-referenced to ensure the price trajectory aligns with the explosive alternative hypothesis.
+    \end{enumerate}
+
+    
+   % \textit{This stringent pipeline ensures comparability with baseline recursive unit-root tests (e.g., GSADF).}
+\end{frame}
+
+\section{Data}
+\frame{{Data description}
+\begin{itemize}
+    \item We detect bubbles in four metal price series, cobalt, copper, lithium and nickel (CO, CU, LI, NI).
+    \item Data are from \url{dailymetalprices.com}
+    \item Sample period: from 2017-05-10 to 2025-10-31
+\end{itemize}
+
+The macroeconomic series are:
+\begin{itemize}
+    \item energy factors: Crude Oil (WTI Spot and Futures) and Natural Gas (Henry Hub)
+    \item macroeconomic factors: 10-Year U.S. Treasury Yield, Trade Weighted U.S. Dollar Index (USDX), 
+    \item and equity and green sentiment factors: MSCI World ETF, CBOE Volatility Index (VIX), S\&P 500 index, MSCI Emerging Markets Futures, NASDAQ Clean Edge Green Energy Index Fund (QCLN)
+\end{itemize}
+
+%Equity & Green Sentiment: 
+Data sources: the Federal Reserve Economic Data (FRED) and Yahoo Finance. To ensure consistency across different trading calendars (e.g., LME vs. NYSE), all series are merged by date, and cubic spline interpolation is applied to align missing observations due to holidays. 
+}
+% --- Section X: Empirical Results ---
+\section{Empirical Results}
+\subsection{}
+
+
+
+\frame{{}
+
+}
+
+\frame{{}
+
+}
+
+\frame{{}
+
+}
+
+% --- Section: Conclusion ---
+\section{Conclusion}
+\begin{frame}
+
+\end{frame}
+
+
+
+% --- Optional: References or Thank You slide ---
+\begin{frame}
+ 
+  \frametitle{Discussion \& Questions}
+   \begin{center}
+  Scan this code to download the full paper:
+\begin{figure}
+    \centering
+    \includegraphics[width=0.35\linewidth]{}
+    %\caption{Caption}
+    %\label{fig:placeholder}
+\end{figure}
+  
+
+    I will be happy to answer any questions.
+    \vspace{1em}
+    
+    Corresponding author: barbara.bedowska-sojka@ue.poznan.pl
+  \end{center}
+
+\end{frame}
+
+
+\begin{frame}[allowframebreaks]{Full References}
+  \frametitle{References}
+  \tiny
+   \bibliography{Mendeley,sample} 
+ \end{frame}
+
+
+\end{document}
+
