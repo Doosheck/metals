@@ -244,6 +244,9 @@ df_final_dataset_up     <- bind_cols(df_final, build_bubble_dummies(bubble_dates
 write_csv2(df_final_dataset_updown, here("R/results_R", "series_and_bubble_up_down.csv"))
 write_csv2(df_final_dataset_up,     here("R/results_R", "series_and_bubble_up.csv"))
 
+#getwd()
+#df_final_dataset_up <- read.csv2("R/results_R/series_and_bubble_up.csv")
+
 # --- 5.4 Filter bubble_dates for plotting (upward only) ---
 bubble_dates_filtered <- imap(bubble_dates_raw, ~ {
   if (is.null(.x) || nrow(.x) == 0) return(NULL)
@@ -282,7 +285,7 @@ plot_bubbles <- function(df_dataset, rects, title = "") {
     {if (nrow(rects) > 0)
       geom_rect(data = rects,
                 aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
-                fill = "grey70", alpha = 0.5)
+                fill = "red", alpha = 0.5)
     } +
     # Price lines
     geom_line(data = df_plot_long,
@@ -291,9 +294,9 @@ plot_bubbles <- function(df_dataset, rects, title = "") {
     facet_wrap(~ Series, scales = "free_y", ncol = 4) +
     theme_minimal() +
     theme(
-      strip.text       = element_text(face = "plain", size = 12), #plot label
+      strip.text       = element_text(face = "plain", size = 14), #plot label
       panel.grid.minor = element_blank(),
-      axis.text        = element_text(size = 7),
+      axis.text        = element_text(size = 9),
       axis.text.x      = element_text(angle = 45, hjust = 1)
     ) +
     labs(title = title, x = NULL, y = NULL)
@@ -323,6 +326,24 @@ plot_updown <- plot_bubbles(df_final_dataset_updown, bubble_rects_all, title = "
 # Save ï¿½ explicit width/height avoids 16-panel crowding
 ggsave(here("R/graphs_R", "bubbles_up_only.pdf"), plot_up, width = 14, height = 10)
 ggsave(here("R/graphs_R", "bubbles_up_and_down.pdf"), plot_updown, width = 14, height = 10)
+
+ggsave(here("R/graphs_R", "bubbles_up_only.tiff"), plot_up, width = 14, height = 10)
+
+# nowy format wykresu
+if(!require(devEMF)) install.packages("devEMF")
+library(devEMF)
+library(here)
+
+# 2. Zmieñ rozszerzenie na .emf w ggsave
+ggsave(
+  filename = here("R/graphs_R", "bubbles_up_only.emf"), 
+  plot = plot_up, 
+  device = {function(filename, ...) devEMF::emf(file = filename, ...)}, 
+  width = 9, 
+  height = 7
+)
+
+
 
 
 # ---- 6. Table Factory ----
@@ -507,10 +528,11 @@ V(g)$metal <- substr(V(g)$name, 1, 2)
 
 set.seed(42) # Ensure reproducible node placement
 fixed_layout <- create_layout(g, layout = "fr")
+
 ggraph(fixed_layout) + 
   
   # Draw edges: Light gray connections
-  geom_edge_link(aes(edge_width = weight), color = "gray80", alpha = 0.7) +
+  geom_edge_link(aes(edge_width = weight), color = "red3", alpha = 0.7) +
   
   # Draw nodes: 
   # shape = 21 is a circle with a border ('color') and a fill ('fill').
@@ -521,7 +543,7 @@ ggraph(fixed_layout) +
   geom_node_text(aes(label = name), repel = TRUE, size = 5.0, fontface = "bold", color = "black") +
   
   # Scales for size and edges
-  scale_edge_width_continuous(range = c(0.2, 2.5), guide = "none") +
+  scale_edge_width_continuous(range = c(0.2, 6), guide = "none") +    #(0, 2.5)
   scale_size_continuous(range = c(8, 20), guide = "none") +
   
   # Map shades of gray to the 'fill' of the circles
@@ -542,7 +564,56 @@ ggraph(fixed_layout) +
 
 # Optional: Save the plot
 dev.off()
-ggsave("R/graphs_R/Metal_Network_21_25_thresh_75p.pdf", width = 8, height = 7)
+ggsave("R/graphs_R/Metal_Network_21_25_thresh_75p_2.pdf", width = 9, height = 7)
+
+set.seed(42)
+fixed_layout1 <- create_layout(g, layout = "fr", weights = E(g)$weight, niter = 500)
+
+
+#rysowanie tiff
+tiff(
+  filename = here("R/graphs_R", "Metal_Network_21_25_thresh_75p_3.tiff"), 
+  width = 9, 
+  height = 7, 
+  units = "in", 
+  res = 600, 
+  compression = "lzw"
+)
+ggraph(fixed_layout1) + 
+  
+  # Draw edges: Light gray connections
+  geom_edge_link(aes(edge_width = weight), color = "red3", alpha = 0.7) +
+  
+  # Draw nodes: 
+  # shape = 21 is a circle with a border ('color') and a fill ('fill').
+  # stroke = 0.8 controls the thickness of the black border.
+  geom_node_point(aes(size = strength, fill = metal), shape = 21, color = "black", stroke = 0.8) +
+  
+  # Add labels
+  geom_node_text(aes(label = name), repel = TRUE, size = 5.0, fontface = "bold", color = "black") +
+  
+  # Scales for size and edges
+  scale_edge_width_continuous(range = c(0.2, 6), guide = "none") +    #(0, 2.5)
+  scale_size_continuous(range = c(8, 20), guide = "none") +
+  
+  # Map shades of gray to the 'fill' of the circles
+  scale_fill_manual(values = c(
+    "CU" = "grey",      # Solid black
+    "NI" = "gray40",     # Dark gray
+    "LI" = "gray85",     # Light gray
+    "CO" = "white"       # White (appears as an empty circle with a black border)
+  )) +
+  
+  theme_void() + 
+  labs(fill = "Metal Group") +
+  theme(
+    legend.position = "none",
+    legend.text = element_text(size = 10),
+    legend.title = element_text(face = "bold", size = 11)
+  )
+
+# Optional: Save the plot
+dev.off()
 
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---

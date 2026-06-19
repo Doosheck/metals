@@ -251,7 +251,8 @@ dcc_all_results <- imap(metal_groups[c("Nickel", "Copper")], function(series_nam
     data  = dplyr::bind_rows(plot_data_list)
   )
 })
-
+#### save results
+saveRDS(dcc_all_results, file = here("R/results_R", "dcc_all_results.rds"))
 
 # --- 8. Article-style plots for Nickel and Copper ---
 theme_article_fixed <- theme_minimal() +
@@ -259,9 +260,9 @@ theme_article_fixed <- theme_minimal() +
     panel.grid.major = element_line(color = "#f0f0f0", linewidth = 0.3),
     panel.grid.minor = element_line(color = "#f8f8f8", linewidth = 0.2),
     strip.background = element_blank(),
-    strip.text       = element_text(face = "plain", size = 10, color = "black"),
+    strip.text       = element_text(face = "plain", size = 14, color = "black"),
     axis.title       = element_blank(),
-    axis.text        = element_text(size = 8, color = "gray30"),
+    axis.text        = element_text(size = 12, color = "gray30"),
     panel.spacing    = unit(1.2, "lines"),
     plot.title       = element_blank(),
     plot.subtitle    = element_blank()
@@ -285,6 +286,8 @@ print(p_copper_final)
 ggsave("R/graphs_R/correlation_nickel_final.pdf", plot = p_nickel_final, width = 10, height = 6)
 ggsave("R/graphs_R/correlation_copper_final.pdf", plot = p_copper_final, width = 10, height = 6)
 
+ggsave("R/graphs_R/correlation_nickel_final.tiff", plot = p_nickel_final, width = 10, height = 6)
+ggsave("R/graphs_R/correlation_copper_final.tiff", plot = p_copper_final, width = 10, height = 6)
 
 # --- 9. Cross-metal DCC (4 benchmarks) ---
 cross_metals <- c("CUDALY", "NIDALY", "LIDALY", "CODALY")
@@ -332,6 +335,8 @@ if (!is.null(fit_4d) && inherits(fit_4d, "DCCfit")) {
       Correlation = cor_array[idx1, idx2, ]
     )
   }))
+  saveRDS(df_cross_correlations, file = "R/results_R/df_cross_correlations_4d.rds")
+  message("Dane korelacji 4D zosta³y pomyœlnie zapisane!")
   
   plot_cross_metals <- ggplot(df_cross_correlations, aes(x = Date, y = Correlation)) +
     geom_line(color = "black", linewidth = 0.4) +
