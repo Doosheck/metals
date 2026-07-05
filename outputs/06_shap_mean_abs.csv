@@ -1,0 +1,181 @@
+Variant,Metal,Model,Feature,FriendlyName,MeanAbsSHAP
+gsadf_v1_period,Cobalt,LASSO,CODALY_Vol10_L1,Cobalt vol,0.125492
+gsadf_v1_period,Cobalt,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.334564
+gsadf_v1_period,Cobalt,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.055244
+gsadf_v1_period,Cobalt,LASSO,VIX_Vol10_L1,VIX vol,0.437534
+gsadf_v1_period,Cobalt,LASSO,YIELD_10Y_Vol10_L1,10Y Yield vol,0.01708
+gsadf_v1_period,Cobalt,LASSO,GOLD_FUT_Vol10_L1,Gold vol,0.042515
+gsadf_v1_period,Cobalt,LASSO,QCLN_Ret_L1,Clean Energy ETF ret,0.083926
+gsadf_v1_period,Cobalt,LASSO,CODALY_Level_L1,Cobalt lvl,0.289384
+gsadf_v1_period,Cobalt,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.098801
+gsadf_v1_period,Cobalt,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.189317
+gsadf_v1_period,Copper,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.184257
+gsadf_v1_period,Copper,LASSO,CUDALY_Level_L1,Copper lvl,0.309755
+gsadf_v1_period,Copper,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.037128
+gsadf_v1_period,Copper,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,0.624812
+gsadf_v1_period,Lithium,LASSO,LIDALY_Ret_L1,Lithium ret,0.041864
+gsadf_v1_period,Lithium,LASSO,GAS_HHUB_Ret_L1,HH Gas ret,0.012152
+gsadf_v1_period,Lithium,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.137017
+gsadf_v1_period,Lithium,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.136066
+gsadf_v1_period,Lithium,LASSO,QCLN_Vol10_L1,Clean Energy ETF vol,0.193345
+gsadf_v1_period,Lithium,LASSO,LIDALY_Level_L1,Lithium lvl,0.021295
+gsadf_v1_period,Lithium,LASSO,OIL_WTI_Level_L1,WTI Oil lvl,0.23466
+gsadf_v1_period,Lithium,LASSO,USD_INDEX_Level_L1,DXY lvl,0.036236
+gsadf_v1_period,Lithium,LASSO,VIX_Level_L1,VIX lvl,0.155427
+gsadf_v1_period,Lithium,LASSO,GOLD_FUT_Level_L1,Gold lvl,0.574289
+gsadf_v1_period,Lithium,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.286937
+gsadf_v1_period,Nickel,LASSO,NIDALY_Ret_L1,Nickel ret,0.072976
+gsadf_v1_period,Nickel,LASSO,NIDALY_Vol10_L1,Nickel vol,0.081043
+gsadf_v1_period,Nickel,LASSO,VIX_Vol10_L1,VIX vol,0.09691
+gsadf_v1_period,Nickel,LASSO,NIDALY_Level_L1,Nickel lvl,0.047616
+gsadf_v1_period,Nickel,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.061202
+gsadf_v1_period,Nickel,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.0438
+gsadf_updown_period,Cobalt,LASSO,CODALY_Ret_L1,Cobalt ret,0.022231
+gsadf_updown_period,Cobalt,LASSO,CODALY_Vol10_L1,Cobalt vol,0.381884
+gsadf_updown_period,Cobalt,LASSO,GAS_HHUB_Ret_L1,HH Gas ret,0.000295
+gsadf_updown_period,Cobalt,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.103867
+gsadf_updown_period,Cobalt,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.056348
+gsadf_updown_period,Cobalt,LASSO,VIX_Vol10_L1,VIX vol,0.039269
+gsadf_updown_period,Cobalt,LASSO,YIELD_10Y_Ret_L1,10Y Yield ret,0.013049
+gsadf_updown_period,Cobalt,LASSO,GOLD_FUT_Vol10_L1,Gold vol,0.113123
+gsadf_updown_period,Cobalt,LASSO,MSCI_EM_Vol10_L1,MSCI EM vol,0.024982
+gsadf_updown_period,Cobalt,LASSO,QCLN_Ret_L1,Clean Energy ETF ret,0.041613
+gsadf_updown_period,Cobalt,LASSO,QCLN_Vol10_L1,Clean Energy ETF vol,0.111723
+gsadf_updown_period,Cobalt,LASSO,CODALY_Level_L1,Cobalt lvl,0.247113
+gsadf_updown_period,Cobalt,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.047708
+gsadf_updown_period,Cobalt,LASSO,GOLD_FUT_Level_L1,Gold lvl,0.876573
+gsadf_updown_period,Cobalt,LASSO,SP500_Level_L1,S&P 500 lvl,0.593069
+gsadf_updown_period,Cobalt,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.027524
+gsadf_updown_period,Copper,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.20832
+gsadf_updown_period,Copper,LASSO,CUDALY_Level_L1,Copper lvl,0.483218
+gsadf_updown_period,Copper,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.099032
+gsadf_updown_period,Copper,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,0.634439
+gsadf_updown_period,Lithium,LASSO,LIDALY_Ret_L1,Lithium ret,0.001545
+gsadf_updown_period,Lithium,LASSO,LIDALY_Vol10_L1,Lithium vol,0.013275
+gsadf_updown_period,Lithium,LASSO,OIL_WTI_Ret_L1,WTI Oil ret,0.002604
+gsadf_updown_period,Lithium,LASSO,OIL_WTI_Vol10_L1,WTI Oil vol,0.001597
+gsadf_updown_period,Lithium,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.135075
+gsadf_updown_period,Lithium,LASSO,VIX_Vol10_L1,VIX vol,0.186219
+gsadf_updown_period,Lithium,LASSO,SP500_Vol10_L1,S&P 500 vol,0.223874
+gsadf_updown_period,Lithium,LASSO,MSCI_EM_Vol10_L1,MSCI EM vol,0.073135
+gsadf_updown_period,Lithium,LASSO,LIDALY_Level_L1,Lithium lvl,0.026489
+gsadf_updown_period,Lithium,LASSO,OIL_WTI_Level_L1,WTI Oil lvl,0.558193
+gsadf_updown_period,Lithium,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.089339
+gsadf_updown_period,Lithium,LASSO,USD_INDEX_Level_L1,DXY lvl,1.209131
+gsadf_updown_period,Lithium,LASSO,VIX_Level_L1,VIX lvl,0.213971
+gsadf_updown_period,Lithium,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.122149
+gsadf_updown_period,Lithium,LASSO,GOLD_FUT_Level_L1,Gold lvl,2.600526
+gsadf_updown_period,Lithium,LASSO,SP500_Level_L1,S&P 500 lvl,0.701786
+gsadf_updown_period,Lithium,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,0.430009
+gsadf_updown_period,Lithium,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.139993
+gsadf_updown_period,Nickel,LASSO,NIDALY_Ret_L1,Nickel ret,0.029217
+gsadf_updown_period,Nickel,LASSO,NIDALY_Vol10_L1,Nickel vol,0.098637
+gsadf_updown_period,Nickel,LASSO,VIX_Vol10_L1,VIX vol,0.058282
+gsadf_updown_period,Nickel,LASSO,NIDALY_Level_L1,Nickel lvl,0.094029
+gsadf_updown_period,Nickel,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.084099
+gsadf_updown_period,Nickel,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.085437
+lppls_0.01_period,Cobalt,LASSO,CODALY_Ret_L1,Cobalt ret,0.020556
+lppls_0.01_period,Cobalt,LASSO,CODALY_Vol10_L1,Cobalt vol,0.078134
+lppls_0.01_period,Cobalt,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.373223
+lppls_0.01_period,Cobalt,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.172872
+lppls_0.01_period,Cobalt,LASSO,VIX_Vol10_L1,VIX vol,0.520078
+lppls_0.01_period,Cobalt,LASSO,MSCI_EM_Ret_L1,MSCI EM ret,0.032826
+lppls_0.01_period,Cobalt,LASSO,MSCI_EM_Vol10_L1,MSCI EM vol,0.315093
+lppls_0.01_period,Cobalt,LASSO,CODALY_Level_L1,Cobalt lvl,0.195266
+lppls_0.01_period,Cobalt,LASSO,VIX_Level_L1,VIX lvl,0.215421
+lppls_0.01_period,Cobalt,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.153448
+lppls_0.01_period,Cobalt,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,0.245586
+lppls_0.01_period,Cobalt,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.096655
+lppls_0.01_period,Copper,LASSO,CUDALY_Ret_L1,Copper ret,0.111746
+lppls_0.01_period,Copper,LASSO,CUDALY_Vol10_L1,Copper vol,0.202925
+lppls_0.01_period,Copper,LASSO,OIL_WTI_Vol10_L1,WTI Oil vol,0.001289
+lppls_0.01_period,Copper,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.1746
+lppls_0.01_period,Copper,LASSO,USD_INDEX_Ret_L1,DXY ret,0.012049
+lppls_0.01_period,Copper,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.131027
+lppls_0.01_period,Copper,LASSO,VIX_Vol10_L1,VIX vol,0.30447
+lppls_0.01_period,Copper,LASSO,YIELD_10Y_Vol10_L1,10Y Yield vol,0.012829
+lppls_0.01_period,Copper,LASSO,GOLD_FUT_Vol10_L1,Gold vol,0.363298
+lppls_0.01_period,Copper,LASSO,MSCI_EM_Vol10_L1,MSCI EM vol,0.084624
+lppls_0.01_period,Copper,LASSO,CUDALY_Level_L1,Copper lvl,0.031456
+lppls_0.01_period,Copper,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.024827
+lppls_0.01_period,Copper,LASSO,USD_INDEX_Level_L1,DXY lvl,0.04982
+lppls_0.01_period,Copper,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.152078
+lppls_0.01_period,Copper,LASSO,GOLD_FUT_Level_L1,Gold lvl,1.583809
+lppls_0.01_period,Copper,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.066428
+lppls_0.01_period,Lithium,LASSO,LIDALY_Ret_L1,Lithium ret,0.000733
+lppls_0.01_period,Lithium,LASSO,LIDALY_Vol10_L1,Lithium vol,0.049505
+lppls_0.01_period,Lithium,LASSO,GAS_HHUB_Ret_L1,HH Gas ret,0.087557
+lppls_0.01_period,Lithium,LASSO,YIELD_10Y_Vol10_L1,10Y Yield vol,0.055537
+lppls_0.01_period,Lithium,LASSO,MSCI_EM_Vol10_L1,MSCI EM vol,0.242644
+lppls_0.01_period,Lithium,LASSO,LIDALY_Level_L1,Lithium lvl,0.079821
+lppls_0.01_period,Lithium,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.161707
+lppls_0.01_period,Lithium,LASSO,VIX_Level_L1,VIX lvl,0.099567
+lppls_0.01_period,Lithium,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.167324
+lppls_0.01_period,Lithium,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,0.026282
+lppls_0.01_period,Lithium,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.221691
+lppls_0.01_period,Nickel,LASSO,NIDALY_Ret_L1,Nickel ret,0.064852
+lppls_0.01_period,Nickel,LASSO,NIDALY_Vol10_L1,Nickel vol,0.054384
+lppls_0.01_period,Nickel,LASSO,OIL_WTI_Vol10_L1,WTI Oil vol,0.001966
+lppls_0.01_period,Nickel,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.108072
+lppls_0.01_period,Nickel,LASSO,VIX_Vol10_L1,VIX vol,0.115154
+lppls_0.01_period,Nickel,LASSO,YIELD_10Y_Vol10_L1,10Y Yield vol,0.014893
+lppls_0.01_period,Nickel,LASSO,GOLD_FUT_Ret_L1,Gold ret,0.050966
+lppls_0.01_period,Nickel,LASSO,GOLD_FUT_Vol10_L1,Gold vol,0.198977
+lppls_0.01_period,Nickel,LASSO,MSCI_ETF_Vol10_L1,MSCI World vol,0.195005
+lppls_0.01_period,Nickel,LASSO,QCLN_Ret_L1,Clean Energy ETF ret,0.005633
+lppls_0.01_period,Nickel,LASSO,QCLN_Vol10_L1,Clean Energy ETF vol,0.039987
+lppls_0.01_period,Nickel,LASSO,NIDALY_Level_L1,Nickel lvl,0.196835
+lppls_0.01_period,Nickel,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.015551
+lppls_0.01_period,Nickel,LASSO,USD_INDEX_Level_L1,DXY lvl,0.062879
+lppls_0.01_period,Nickel,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.207903
+lppls_0.01_period,Nickel,LASSO,MSCI_ETF_Level_L1,MSCI World lvl,0.10297
+lppls_0.01_period,Nickel,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.033063
+cusum_smoothed,Cobalt,LASSO,USD_INDEX_Ret_L1,DXY ret,0.053135
+cusum_smoothed,Cobalt,LASSO,VIX_Vol10_L1,VIX vol,0.056375
+cusum_smoothed,Cobalt,LASSO,GOLD_FUT_Ret_L1,Gold ret,0.029188
+cusum_smoothed,Cobalt,LASSO,QCLN_Ret_L1,Clean Energy ETF ret,0.073115
+cusum_smoothed,Cobalt,LASSO,QCLN_Vol10_L1,Clean Energy ETF vol,0.265139
+cusum_smoothed,Cobalt,LASSO,CODALY_Level_L1,Cobalt lvl,1.044631
+cusum_smoothed,Cobalt,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.583315
+cusum_smoothed,Cobalt,LASSO,VIX_Level_L1,VIX lvl,0.005033
+cusum_smoothed,Cobalt,LASSO,SP500_Level_L1,S&P 500 lvl,0.320217
+cusum_smoothed,Cobalt,LASSO,MSCI_ETF_Level_L1,MSCI World lvl,0.179349
+cusum_smoothed,Cobalt,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.212605
+cusum_smoothed,Copper,LASSO,OIL_WTI_Ret_L1,WTI Oil ret,0.00704
+cusum_smoothed,Copper,LASSO,OIL_WTI_Vol10_L1,WTI Oil vol,0.007124
+cusum_smoothed,Copper,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.065134
+cusum_smoothed,Copper,LASSO,YIELD_10Y_Vol10_L1,10Y Yield vol,0.00794
+cusum_smoothed,Copper,LASSO,SP500_Vol10_L1,S&P 500 vol,0.608134
+cusum_smoothed,Copper,LASSO,QCLN_Vol10_L1,Clean Energy ETF vol,0.539606
+cusum_smoothed,Copper,LASSO,CUDALY_Level_L1,Copper lvl,0.112365
+cusum_smoothed,Copper,LASSO,OIL_WTI_Level_L1,WTI Oil lvl,1.172206
+cusum_smoothed,Copper,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.031603
+cusum_smoothed,Copper,LASSO,USD_INDEX_Level_L1,DXY lvl,1.300757
+cusum_smoothed,Copper,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.027949
+cusum_smoothed,Copper,LASSO,GOLD_FUT_Level_L1,Gold lvl,2.442882
+cusum_smoothed,Lithium,LASSO,LIDALY_Vol10_L1,Lithium vol,0.01857
+cusum_smoothed,Lithium,LASSO,GAS_HHUB_Vol10_L1,HH Gas vol,0.119749
+cusum_smoothed,Lithium,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.106432
+cusum_smoothed,Lithium,LASSO,VIX_Vol10_L1,VIX vol,0.015857
+cusum_smoothed,Lithium,LASSO,YIELD_10Y_Vol10_L1,10Y Yield vol,0.051684
+cusum_smoothed,Lithium,LASSO,SP500_Vol10_L1,S&P 500 vol,0.166348
+cusum_smoothed,Lithium,LASSO,QCLN_Ret_L1,Clean Energy ETF ret,0.083963
+cusum_smoothed,Lithium,LASSO,QCLN_Vol10_L1,Clean Energy ETF vol,0.297594
+cusum_smoothed,Lithium,LASSO,LIDALY_Level_L1,Lithium lvl,0.210015
+cusum_smoothed,Lithium,LASSO,VIX_Level_L1,VIX lvl,0.140794
+cusum_smoothed,Lithium,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.176094
+cusum_smoothed,Lithium,LASSO,SP500_Level_L1,S&P 500 lvl,0.457756
+cusum_smoothed,Lithium,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,1.264016
+cusum_smoothed,Lithium,LASSO,QCLN_Level_L1,Clean Energy ETF lvl,0.06985
+cusum_smoothed,Nickel,LASSO,OIL_WTI_Vol10_L1,WTI Oil vol,0.000369
+cusum_smoothed,Nickel,LASSO,USD_INDEX_Vol10_L1,DXY vol,0.519882
+cusum_smoothed,Nickel,LASSO,VIX_Vol10_L1,VIX vol,0.153797
+cusum_smoothed,Nickel,LASSO,YIELD_10Y_Ret_L1,10Y Yield ret,0.002215
+cusum_smoothed,Nickel,LASSO,GOLD_FUT_Ret_L1,Gold ret,0.040948
+cusum_smoothed,Nickel,LASSO,MSCI_EM_Vol10_L1,MSCI EM vol,0.149825
+cusum_smoothed,Nickel,LASSO,NIDALY_Level_L1,Nickel lvl,0.29298
+cusum_smoothed,Nickel,LASSO,GAS_HHUB_Level_L1,HH Gas lvl,0.083958
+cusum_smoothed,Nickel,LASSO,VIX_Level_L1,VIX lvl,0.14236
+cusum_smoothed,Nickel,LASSO,YIELD_10Y_Level_L1,10Y Yield lvl,0.255793
+cusum_smoothed,Nickel,LASSO,SP500_Level_L1,S&P 500 lvl,0.959939
+cusum_smoothed,Nickel,LASSO,MSCI_EM_Level_L1,MSCI EM lvl,0.034606
