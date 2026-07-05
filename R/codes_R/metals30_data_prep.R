@@ -189,7 +189,7 @@ str(df_daly)
 saveRDS(df_daly, "R/df_daly_raw.rds")
 write.csv2(df_daly, "R/df_daly_raw.csv")
 
-df_daly <- readRDS("R/df_daly_raw.rds")
+df_daly <- readRDS("R/data_R/df_daly_raw.rds")
 
 ##---- Bubble detection:----
 ###---- Procedure for 4 series----
@@ -453,6 +453,7 @@ ggsave("R/plots_timeline/All_Metals_Bubbles201711_nologs.png", final_plot, width
 # HH=F: Natural Gas (Henry Hub) - strange
 # QCLN: First Trust NASDAQ Clean Edge Green Energy Index Fund ()
 # Gold Apr 26 (GC=F) yahoo
+# Vanguard Emerging Markets Stock Index Fund (VWO) - nie uzywalismy, ale jest
 # DE000A1EY8J4.SG (yahoo) Solactive Global Lithium Index Stuttgart EUR
 # Solactive Solar Index GTR (DE000SL0EBG1.SG) Stuttgart EUR -little changes over time
 
@@ -501,12 +502,12 @@ df_yahoo <- df_yahoo %>%
   right_join(master_dates, by = "date") %>% 
   
   # Rename columns (matches your snippet)
-  rename(
+  dplyr::rename(
     C_EUA = KEUA,
     #OIL_BRENT = `CL=F`, #instead of that we have WTI 
     GOLD_FUT = `GC=F`,
     MSCI_ETF = URTH, 
-    MSCI_EM = `MME=F`,
+    #MSCI_EM = `MME=F`,
     SP500 = `^GSPC`,
     QCLN = QCLN, 
     C_CHR = "1898.HK",
@@ -553,6 +554,49 @@ df_final <- df_merged_raw %>%
 summary(df_final)
 
 
+# ## plots of macro and financial series
+# # 1. Przekszta³cenie danych z formatu szerokiego (wide) na d³ugi (long)
+# df_long <- df_final %>%
+#   pivot_longer(
+#     cols = -Date,               # Wybieramy wszystkie kolumny oprócz 'Date'
+#     names_to = "Variable",      # Nowa kolumna z nazwami zmiennych
+#     values_to = "Value"         # Nowa kolumna z wartoœciami
+#   )
+# 
+# # 2. Generowanie wykresu panelowego 4x4
+# 
+# library(ggplot2)
+# library(tidyr)
+# library(dplyr)
+# 
+# #df_final <- df_master[, 1:17]
+# # Przekszta³cenie danych do formatu d³ugiego
+# df_long <- df_final %>%
+#   pivot_longer(
+#     cols = -Date,
+#     names_to = "Variable",
+#     values_to = "Value"
+#   )
+# 
+# # Generowanie minimalistycznego wykresu panelowego
+# p_4by4 <- ggplot(df_long, aes(x = Date, y = Value)) +
+#   geom_line(color = "black", linewidth = 0.5) + 
+#   facet_wrap(~ Variable, scales = "free_y", ncol = 4) +
+#   labs(x = NULL, y = NULL) + # Usuniêcie tytu³ów oraz etykiet g³ównych osi X i Y
+#   theme_bw(base_size = 11) + 
+#   theme(
+#     panel.grid.major = element_blank(),     # Usuniêcie g³ównych linii siatki
+#     panel.grid.minor = element_blank(),     # Usuniêcie pomocniczych linii siatki
+#     strip.background = element_blank(),     # Usuniêcie szarego t³a z nag³ówków zmiennych
+#     strip.text = element_text(face = "bold", size = 10), # Pogrubienie nazw zmiennych
+#     axis.text.x = element_text(angle = 45, hjust = 1, size = 8, color = "black"),
+#     axis.text.y = element_text(size = 8, color = "black"),
+#     axis.ticks = element_line(color = "black"),
+#     panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5), # Czysta ramka
+#     panel.spacing = unit(1, "lines")        # Przestrzeñ miêdzy panelami
+#   )
+# ggsave("R/graphs_R/All_Series_4x4.png", p_4by4, width = 12, height = 10, dpi = 300, bg="white")
+
 ##---- Join datasets ----
 
 df_master <- df_final %>%
@@ -569,9 +613,9 @@ df_master <- df_master %>%
 # Verify new names
 print(names(df_master))
 summary(df_master)
-saveRDS(df_master, "R/df_master.rds")
-df_master <- readRDS("R/df_master.rds")
-write.csv2(df_master, "R/df_master.csv")
+saveRDS(df_master, "R/data_R/df_master.rds")
+df_master <- readRDS("R/data_R/df_master.rds")
+write.csv2(df_master, "R/data_R/df_master.csv")
 
 
 df_master_plot <- df_master %>%
