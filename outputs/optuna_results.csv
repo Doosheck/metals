@@ -1,5 +1,4 @@
-Metal,Variant,Model,AUC_base,AUC_tuned,Delta_AUC,Best_Params
-Cobalt,lppls_0.10_period,LASSO,0.96,0.974,0.014,{'C': 0.21040083874665066}
-Copper,gsadf_ols,LASSO,0.999,0.999,-0.0,{'C': 0.09846738873614563}
-Lithium,gsadf_updown_period,LASSO,0.606,0.625,0.019,{'C': 1.0059552149250446}
-Nickel,gsadf_updown,LASSO,0.931,0.935,0.004,{'C': 0.17495032668179822}
+Metal,Variant,Model,CV_default,CV_tuned,Holdout_AUC_default,Holdout_AUC_tuned,Delta_AUC_holdout,Holdout_AP_default,Holdout_AP_tuned,Holdout_days,Holdout_bubble_days,Best_Params
+Cobalt,gsadf_ols,RF,0.908,0.921,0.741,0.762,0.021,0.616,0.663,418,36,"{'n_estimators': 105, 'max_depth': 12, 'min_samples_leaf': 6, 'max_features': 'log2'}"
+Copper,lppls_0.01_period,LightGBM,0.539,0.624,0.599,0.541,-0.058,0.177,0.157,418,67,"{'n_estimators': 173, 'learning_rate': 0.07934237918397923, 'num_leaves': 124, 'max_depth': 7, 'reg_alpha': 3.3654396660163637, 'reg_lambda': 0.2087833259486729, 'min_child_samples': 18, 'subsample': 0.6712551170760844, 'colsample_bytree': 0.6127482014103954}"
+Lithium,gsadf_ols,LightGBM,0.618,0.827,0.969,0.99,0.021,0.741,0.843,418,8,"{'n_estimators': 187, 'learning_rate': 0.06338734634267867, 'num_leaves': 119, 'max_depth': 8, 'reg_alpha': 0.012507266280050125, 'reg_lambda': 0.014136864353486895, 'min_child_samples': 7, 'subsample': 0.8072655326142487, 'colsample_bytree': 0.8332992688984392}"
