@@ -106,53 +106,12 @@ message("Metals included: ", paste(names(list_filtered), collapse = ", "))
 message("Series included: ", paste(names(df_final)[-1], collapse = ", "))
 message("Total columns in df_final: ", ncol(df_final) - 1) 
 
-# --- 2.5 Adding one series:
-#Global X Lithium & Battery Tech ETF (LIT)
-# library(tidyverse)
-# library(tidyquant)
-# 
-# # 1. Fetch LIT data from Yahoo Finance
-# # We select only Date and Adjusted price to keep it concise
-# df_lit <- tq_get("LIT", from = min(common_dates), to = max(common_dates)) %>%
-#   select(Date = date, LIT = adjusted)
-# 
-# # 2. Add LIT to the existing list or join directly
-# # Assuming list_filtered is your existing list of tibbles
-# df_final <- list_filtered %>%
-#   map(~ filter(.x, Date %in% common_dates)) %>%
-#   reduce(full_join, by = "Date") %>%
-#   full_join(df_lit, by = "Date") %>% # Join the Yahoo Finance data
-#   arrange(Date)
-# 
-# print(paste("Analysis starts on:", min(df_final$Date)))
-# print(paste("Analysis ends on:", max(df_final$Date)))
-# print(paste("Total observations (rows):", nrow(df_final)))
-# head(df_final)
+#--- data saved---- 
+write_csv(df_final, here("data", "combined_metals_cleaned3.csv"))
 
-
-# # --- 2.5a Save the Combined File ---
-# # This saves the synchronized 'df_final' containing all selected metals
-# write_csv(df_final, here("data", "combined_metals_cleaned2.csv"))
-# message("Saved combined file: combined_metals_cleaned2.csv")
 
 df_plot <- df_final %>%
   pivot_longer(cols = -Date, names_to = "Series", values_to = "Price")
-
-# 2. Generate the plot - not used in the paper
-# ggplot(df_plot, aes(x = Date, y = Price, color = Series)) +
-#   geom_line(show.legend = FALSE) + # Legend is redundant if we use facets
-#   facet_wrap(~ Series, ncol = 4, scales = "free_y") + 
-#   theme_minimal() +
-#   labs(
-#     title = "Time Series Overview: Metals & LIT",
-#     subtitle = "Standardized by individual scales (free y-axis)",
-#     x = NULL,
-#     y = "Adjusted Price / Value"
-#   ) +
-#   theme(
-#     strip.text = element_text(face = "bold", size = 8),
-#     axis.text.x = element_text(angle = 45, hjust = 1)
-#   )
 
 # --- 4.1. Matrix Preparation ---
 # exuber requires a numeric matrix. We log-transform prices here.
@@ -445,49 +404,111 @@ make_bubble_table(
 # ---- 7. Descriptive Statistics ----
 library(knitr)
 library(kableExtra)
+install.packages("moments")
+library(moments)
+library(tidyverse)
+install.packages("writexl")
+library(writexl)
+install.packages("FinTS")
+library(FinTS)
+
+#df_final <- read.csv("data/combined_metals_cleaned3.csv", sep = ",", dec = ".")
+
 
 # 1. Compute log-returns (same transformation used for RADF)
 df_returns <- df_final %>%
-  dplyr::arrange(Date) %>% 
+  #dplyr::arrange(Date) %>% 
   dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x))))%>% 
   drop_na()
 
-df_returns <- df_final %>%
-  dplyr::arrange(Date) %>% 
-  dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x))))%>% 
-  drop_na()
 
+# df_desc <- df_returns %>%
+#   dplyr::select(-Date) %>%
+#   reframe(across(everything(), list(
+#     Mean = ~ mean(.x, na.rm = TRUE),
+#     Std  = ~ sd(.x,   na.rm = TRUE),
+#     Min  = ~ min(.x,  na.rm = TRUE),
+#     Q1   = ~ quantile(.x, 0.25, na.rm = TRUE),
+#     Q3   = ~ quantile(.x, 0.75, na.rm = TRUE),
+#     Max  = ~ max(.x,  na.rm = TRUE),
+#     #Zeros   = ~ sum(.x == 0, na.rm = TRUE),
+#     ZeroPct = ~ mean(.x == 0, na.rm = TRUE) * 100
+#   ))) %>%
+#   pivot_longer(everything(),
+#                names_to      = c("Ticker", ".value"),
+#                names_pattern = "^(.+)_(Mean|Std|Min|Q1|Q3|Max|ZeroPct)$") %>%
+#   arrange(Ticker)
+
+#stat 2:
+# Calculate descriptive statistics and autocorrelation tests for squared returns
 df_desc <- df_returns %>%
-  dplyr::select(-Date) %>%
+  select(-Date) %>%
   reframe(across(everything(), list(
-    Mean = ~ mean(.x, na.rm = TRUE),
-    Std  = ~ sd(.x,   na.rm = TRUE),
-    Min  = ~ min(.x,  na.rm = TRUE),
-    Q1   = ~ quantile(.x, 0.25, na.rm = TRUE),
-    Q3   = ~ quantile(.x, 0.75, na.rm = TRUE),
-    Max  = ~ max(.x,  na.rm = TRUE),
-    #Zeros   = ~ sum(.x == 0, na.rm = TRUE),
-    ZeroPct = ~ mean(.x == 0, na.rm = TRUE) * 100
+    Mean      = ~ mean(.x, na.rm = TRUE),
+    Std       = ~ sd(.x, na.rm = TRUE),
+    Min       = ~ min(.x, na.rm = TRUE),
+    Max       = ~ max(.x, na.rm = TRUE),
+    Skew      = ~ skewness(.x, na.rm = TRUE),
+    Kurt      = ~ kurtosis(.x, na.rm = TRUE),
+    ZeroPct   = ~ mean(.x == 0, na.rm = TRUE) * 100,
+    # Ljung-Box test for ARCH effects on squared returns (lag=10 is typical for daily data)
+    # LBsq_pval = ~ Box.test(.x^2, lag = 2, type = "Ljung-Box")$p.value
+    ARCH_pval = ~ ArchTest(.x, lags = 10, demean = TRUE)$p.value
   ))) %>%
-  pivot_longer(everything(),
-               names_to      = c("Ticker", ".value"),
-               names_pattern = "^(.+)_(Mean|Std|Min|Q1|Q3|Max|ZeroPct)$") %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = c("Ticker", ".value"),
+    # Regex updated to strictly match the new list of functions
+    names_pattern = "^(.+)_(Mean|Std|Min|Max|Skew|Kurt|ZeroPct|ARCH_pval)$"
+  ) %>%
   arrange(Ticker)
 
-df_desc_fmt <- df_desc %>%
-  mutate(across(c(Mean, Std, Min, Q1, Q3, Max, ZeroPct),
-                ~ formatC(.x, digits = 3, format = "f")))
 
-kable_output <- kable(df_desc_fmt,
-                      format    = "latex",
-                      booktabs  = TRUE,
-                      linesep   = "",
-                      caption   = "Descriptive Statistics of Metal Price Returns",
-                      label     = "tab:metals_returns_stats",
-                      col.names = c("Ticker", "Mean", "Std", "Min", "Q1", "Q3", "Max", "ZeroPct"))
+# df_desc_fmt <- df_desc %>%
+#   mutate(across(c(Mean, Std, Min, Q1, Q3, Max, ZeroPct),
+#                 ~ formatC(.x, digits = 3, format = "f")))
+#stat2
+df_desc_fmt <- df_desc %>%
+  # Apply formatting only to numeric columns to avoid modifying the 'Ticker' character column
+  # sprintf("%.3f") converts numbers to character strings with exactly 2 decimal places, ideal for LaTeX/reporting
+  mutate(across(where(is.numeric), ~ sprintf("%.2f", .x)))
+
+# kable_output <- kable(df_desc_fmt,
+#                       format    = "latex",
+#                       booktabs  = TRUE,
+#                       linesep   = "",
+#                       caption   = "Descriptive Statistics of Metal Price Returns",
+#                       label     = "tab:metals_returns_stats",
+#                       col.names = c("Ticker", "Mean", "Std", "Min", "Q1", "Q3", "Max", "ZeroPct"))
+# print(kable_output)
+
+#stat2
+kable_output <- kable(
+  df_desc_fmt,
+  format    = "latex",
+  booktabs  = TRUE,
+  linesep   = "",
+  caption   = "Descriptive Statistics of Metal Price Returns",
+  label     = "tab:metals_returns_stats",
+  # Match the exact number of columns (9) and provide publication-ready headers
+  col.names = c("Metal", "Mean", "Std. Dev.", "Min", "Max", "Skewness", "Kurtosis", "Zeros (%)", "ARCH p-val")
+)
 print(kable_output)
 
-write_csv2(df_desc_fmt, here("R/results_R", "descriptive_stats.csv"))
+df_desc_fmt %>%
+  rename(
+    Metal       = Ticker,
+    `Std. Dev.` = Std,
+    Skewness    = Skew,
+    Kurtosis    = Kurt,
+    `Zeros (%)` = ZeroPct,
+    `ARCH p-val`  = ARCH_pval
+  ) %>%
+  # Write to CSV using a semicolon separator (Polish Excel standard)
+  # The here() function dynamically builds the robust relative path
+  write_csv2(file = here("R/results_R", "metals1_tab2.csv"))
+#or
+#write_csv2(df_desc_fmt, here("R/results_R", "metals1_tab2.csv"))
 
 #---- 8 Network-----
 library(dplyr)
@@ -572,7 +593,7 @@ fixed_layout1 <- create_layout(g, layout = "fr", weights = E(g)$weight, niter = 
 
 #rysowanie tiff
 tiff(
-  filename = here("R/graphs_R", "Metal_Network_21_25_thresh_75p_3.tiff"), 
+  filename = here("R/graphs_R", "Metal_Network_21_25_thresh_75p_2.tiff"), 
   width = 9, 
   height = 7, 
   units = "in", 
@@ -614,6 +635,217 @@ ggraph(fixed_layout1) +
 
 # Optional: Save the plot
 dev.off()
+ggsave("R/graphs_R/Metal_Network_21_25_thresh_75p_4.tiff", width = 9, height = 7)
+
+########################siec2
+# 1. Define thresholds using the quantile approach (Approach 2)
+# We assign the base matrix to a working object
+weight_matrix <- base_weight_matrix
+
+# Calculate the 75th percentile of the upper triangle correlation matrix
+cor_threshold <- quantile(cor_matrix[upper.tri(cor_matrix)], 0.75, na.rm = TRUE)
+weight_threshold <- 2 - sqrt(2 * (1 - cor_threshold))
+
+# Apply threshold: explicitly assign valid weights in the first condition, zero in the second
+weight_matrix <- ifelse(weight_matrix >= weight_threshold, weight_matrix, 0)
+
+# 2. Build the undirected graph from the weight adjacency matrix
+g <- graph_from_adjacency_matrix(
+  weight_matrix, 
+  mode = "undirected", 
+  weighted = TRUE, 
+  diag = FALSE
+)
+
+# 3. Calculate node properties
+# 'strength' = sum of adjacent edge weights
+V(g)$strength <- strength(g, weights = E(g)$weight)
+# Extract metal group prefix (first 2 letters) using stringr
+V(g)$metal <- str_sub(V(g)$name, 1, 2) 
+
+# 4. Generate the reproducible layout
+set.seed(42) # Ensure reproducible node placement for the FR algorithm
+fixed_layout <- create_layout(g, layout = "fr")
+
+# 5. Build the plot object
+network_plot <- ggraph(fixed_layout) + 
+  
+  # Draw edges: Connections weighted by strength
+  geom_edge_link(aes(edge_width = weight), color = "red3", alpha = 0.7) +
+  
+  # Draw nodes: Shape 21 allows both fill and stroke
+  geom_node_point(
+    aes(size = strength, fill = metal), 
+    shape = 21, color = "black", stroke = 0.8
+  ) +
+  
+  # Add labels with aggressive repel to prevent overlaps
+  geom_node_text(
+    aes(label = name), 
+    repel = TRUE, 
+    size = 7.0, 
+    fontface = "bold", 
+    color = "black",
+    force = 5,
+    box.padding = 1.0,
+    point.padding = 0.8,
+    max.overlaps = Inf,
+    min.segment.length = Inf    #0.1 - bêd¹ kreski
+  ) +
+  
+  # Scales for edges and node sizes
+  scale_edge_width_continuous(range = c(0.2, 4), guide = "none") + 
+  scale_size_continuous(range = c(6, 15), guide = "none") +
+  
+  # Metal group colors mapped to node fill
+  scale_fill_manual(values = c(
+    "CU" = "darkorange3",     
+    "NI" = "seagreen",   
+    "LI" = "gray",   
+    "CO" = "blue3"     
+  )) +
+  
+  # Expand canvas boundaries to prevent edge nodes from being cut off
+  scale_x_continuous(expand = expansion(mult = 0.15)) +
+  scale_y_continuous(expand = expansion(mult = 0.15)) +
+  
+  theme_void() + 
+  labs(fill = "Metal Group") +
+  theme(
+    legend.position = "none",
+    legend.text = element_text(size = 10),
+    legend.title = element_text(face = "bold", size = 11)
+  )
+
+print(network_plot)
+
+# Save the plot as a high-resolution TIFF file suitable for academic publishing
+ggsave(
+  filename = here("R/graphs_R", "Metal_Network_21_25_thresh_75p_5color1.tiff"),
+  plot = network_plot,
+  bg = "white",
+  device = "tiff",
+  width = 9, 
+  height = 7, 
+  units = "in", 
+  #res = 600, 
+  #width = 14, 
+  #height = 10,
+  dpi = 300,              # 300 DPI is the standard minimum for academic journals
+  compression = "lzw"     # Lossless compression to keep file size manageable
+)
+
+ggsave(
+  filename = here("R/graphs_R", "Metal_Network_21_25_thresh_75p_5color1.pdf"),
+  plot = network_plot,
+  bg = "white",
+  #device = "tiff",
+  width = 9, 
+  height = 7, 
+  units = "in" 
+  #res = 600, 
+  #width = 14, 
+  #height = 10,
+  #dpi = 300,              # 300 DPI is the standard minimum for academic journals
+  #compression = "lzw"     # Lossless compression to keep file size manageable
+)
+
+######siec3
+
+# 1. Define thresholds using the quantile approach
+weight_matrix <- base_weight_matrix
+cor_threshold <- quantile(cor_matrix[upper.tri(cor_matrix)], 0.75, na.rm = TRUE)
+weight_threshold <- 2 - sqrt(2 * (1 - cor_threshold))
+
+# Explicitly assign valid weights in the first condition, zero in the second
+weight_matrix <- ifelse(weight_matrix >= weight_threshold, weight_matrix, 0)
+
+# 2. Build the undirected graph
+g <- graph_from_adjacency_matrix(
+  weight_matrix, 
+  mode = "undirected", 
+  weighted = TRUE, 
+  diag = FALSE
+)
+
+# 3. Calculate node properties
+V(g)$strength <- strength(g, weights = E(g)$weight)
+V(g)$metal <- str_sub(V(g)$name, 1, 2) 
+
+# -------------------------------------------------------------------------
+# 4. Generate the reproducible layout (CRITICAL CHANGE)
+# -------------------------------------------------------------------------
+
+set.seed(42) 
+
+# Pass weights = NA to prevent highly correlated nodes from collapsing into each other.
+# The graph will spread based on connections existing, not their magnitude.
+# Edge thickness in the plot will STILL reflect the correct statistical weights.
+#fixed_layout <- create_layout(g, layout = "fr", weights = NA)
+
+# NOTE: If "fr" still clusters too tightly, uncomment the line below to use Kamada-Kawai, 
+# which models the graph as a system of springs with resting lengths proportional to shortest paths.
+fixed_layout <- create_layout(g, layout = "kk", weights = NA)
+#fixed_layout <- create_layout(g, layout = "circle")
+
+
+# 5. Build the plot object
+network_plot <- ggraph(fixed_layout) + 
+  
+  geom_edge_link(aes(edge_width = weight), color = "red3", alpha = 0.7) + #0.7
+  
+  geom_node_point(
+    aes(size = strength, fill = metal), 
+    shape = 21, color = "black", stroke = 0.8
+  ) +
+  
+  geom_node_text(
+    aes(label = name), 
+    repel = TRUE, 
+    size = 7.0, 
+    fontface = "bold", 
+    color = "black",
+    force = 5,
+    box.padding = 1.0,
+    point.padding = 1.2, #0.8,
+    max.overlaps = Inf,
+    min.segment.length = Inf 
+  ) +
+  
+  scale_edge_width_continuous(range = c(0.2, 4), guide = "none") + 
+  scale_size_continuous(range = c(6, 15), guide = "none") +
+  
+  scale_fill_manual(values = c(
+    "CU" = "orange2",     
+    "NI" = "seagreen4",   
+    "LI" = "gray61",   
+    "CO" = "blue2"     
+  )) +
+  
+  scale_x_continuous(expand = expansion(mult = 0.15)) +
+  scale_y_continuous(expand = expansion(mult = 0.15)) +
+  
+  theme_void() + 
+  labs(fill = "Metal Group") +
+  theme(
+    legend.position = "none",
+    legend.text = element_text(size = 10),
+    legend.title = element_text(face = "bold", size = 11)
+  )
+
+# 6. View and Save Output
+print(network_plot)
+
+ggsave(
+  filename = here("R/graphs_R", "Metal_Network_21_25_thresh_75p_6kk.tiff"),
+  plot = network_plot,
+  device = "tiff",
+  width = 9, #14, 
+  height = 7, #10,
+  dpi = 300,              
+  compression = "lzw",    
+  bg = "white"            
+)
 
 # ---- OLD code ----
 # --- 5.1. Extract Bubble Information ---

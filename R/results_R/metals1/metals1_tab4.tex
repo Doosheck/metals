@@ -1,0 +1,26 @@
+\begin{table}[!h]
+\centering
+\caption{\label{tab:johansen}Results of the Johansen Cointegration Tests}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{tabular}[t]{>{}lcccccclcl}
+\toprule
+\multicolumn{2}{c}{ } & \multicolumn{4}{c}{Trace statistics} & \multicolumn{4}{c}{Adjustment speed} \\
+\cmidrule(l{3pt}r{3pt}){3-6} \cmidrule(l{3pt}r{3pt}){7-10}
+Metal & $r$ & $r=0$ & $r \leq 1$ & $r \leq 2$ & $r \leq 3$ & Max $|\alpha|$ & Follower & Min $|\alpha|$ & Leader\\
+\midrule
+\addlinespace[0.3em]
+\multicolumn{10}{l}{\textbf{Raw series}}\\
+\textbf{COBALT} & 2 & 74.45*** & 37.76** & 19.10* &  & 0.217*** & CODALY & 0.018 & COWUXI\\
+\textbf{COPPER} & 1 & 209.65*** & 14.49 &  &  & 0.313*** & CUDALY & 0.008 & CUSHFE\\
+\textbf{LITHIUM} & 3 & 174.19*** & 102.34*** & 42.29*** & 0.71 & 0.195*** & LICOMX & 0.030*** & LIANTH\\
+\textbf{NICKEL} & 3 & 129.82*** & 66.53*** & 24.25** & 1.91 & 0.437*** & NILMEX & 0.069** & NIWUXI\\
+\addlinespace[0.3em]
+\multicolumn{10}{l}{\textbf{Filtered}}\\
+\textbf{COBALT} & 2 & 75.65*** & 40.49** & 19.49* &  & 0.246* & COCOMX & 0.009 & COWUXI\\
+\textbf{COPPER} & 1 & 213.94*** & 18.26 &  &  & 0.309*** & CUDALY & 0.004 & CUSHFE\\
+\textbf{LITHIUM} & 3 & 167.54*** & 97.97*** & 41.40*** & 3.43 & 0.204*** & LICOMX & 0.029*** & LIANTH\\
+\textbf{NICKEL} & 3 & 302.28*** & 74.20*** & 31.73*** & 3.77 & 0.791*** & NILMEX & 0.099 & NIWUXI\\
+\bottomrule
+\end{tabular}
+\end{table}

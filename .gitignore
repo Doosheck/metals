@@ -1,59 +1,110 @@
-# VS Code (added BBS)
-.vscode/
+# Wersja połączona: Twoje dotychczasowe reguły + reguły dla metals1,
+# odduplikowana. Zmiany względem sklejki opisane na dole pliku.
 
-# Generated analysis outputs
-#barb_experiments/output/
-!barb_experiments/output/*.png
+# ---------------------------------------------------------------------
+#  R / RStudio
+# ---------------------------------------------------------------------
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+.lintr
 
-# Python cache/bytecode
+# renv: renv.lock i ustawienia SĄ wersjonowane, biblioteka nie
+renv/library/
+renv/local/
+renv/staging/
+renv/python/
+renv/sandbox/
+
+# ---------------------------------------------------------------------
+#  Python
+# ---------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual environments
+.ipynb_checkpoints/
 .venv/
 venv/
 env/
-
-# Jupyter notebook checkpoints
-.ipynb_checkpoints/
-
-# OS / editor files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-
-# Build artifacts
 build/
 dist/
 *.egg-info/
 
-# Local data summaries/backups
-~$*.xlsx
-*.bak
-.Rproj.user
-.Rhistory
-.RData
-.lintr
+# ---------------------------------------------------------------------
+#  Edytory i system
+# ---------------------------------------------------------------------
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Office temporary files
+# pliki tymczasowe Office / LibreOffice
 ~$*
 .~lock.*
+*.bak
 
-# LaTeX auxiliary files
+# ---------------------------------------------------------------------
+#  Artefakty kompilacji LaTeXa
+# ---------------------------------------------------------------------
+# UWAGA: nie ma tu *.pdf ani *.tex, i to jest celowe.
+#   *.pdf  wycinałoby wszystkie pięć rysunków artykułu
+#          (bubbles_up_only1.pdf, Metal_Network_...pdf, correlation_*.pdf,
+#          DCC_4metals.pdf)
+#   *.tex  wycinałoby wygenerowane tabele
+#          (metals1_tab2.tex, metals1_tab3.tex, metals1_tab4.tex)
+# Jeśli kiedyś będziesz kompilować LaTeXa w tym repozytorium i chcesz
+# trzymać wynikowy PDF poza gitem, dopisz konkretną nazwę, nie wzorzec:
+#   main.pdf
 *.aux
+*.bbl
+*.blg
 *.log
 *.toc
 *.out
-*.bbl
-*.blg
 *.fdb_latexmk
 *.fls
 *.synctex.gz
-*.pdf
 
-# Windows system files (usuniecie plikow konfiguracyjnych)
-desktop.ini".Rhistory" 
-".Rhistory" 
-".Rproj.user/" 
+# ---------------------------------------------------------------------
+#  Wyniki odtwarzalne przez kod
+# ---------------------------------------------------------------------
+# Obiekty modeli i cache Monte Carlo. m11 używa ziarna 123, więc wartości
+# krytyczne odtwarzają się identycznie. Gdybyś chciała jednak dołączyć
+# konkretny plik, wymuś to:
+#   git add -f R/results_R/metals1/dcc_all_results.rds
+*.rds
+
+# Rastry 300 dpi dla wydawnictwa; wersje PDF są wersjonowane
+*.tiff
+*.tif
+
+# Archiwum tworzone przez cleanup_metals1.R
+_archive_*/
+
+# ---------------------------------------------------------------------
+#  Manuskrypt
+# ---------------------------------------------------------------------
+# Sam artykuł nie należy do repozytorium z kodem
+*.docx
+
+# =====================================================================
+#  Co zniknęło względem sklejki i dlaczego
+#
+#  *.pdf                     USUNIĘTE - wycinało wszystkie rysunki artykułu
+#  desktop.ini".Rhistory"    USUNIĘTE - sklejone dwie linie; wzorzec z
+#  ".Rhistory"                          cudzysłowami szuka pliku, którego
+#  ".Rproj.user/"                       nazwa zawiera znak ", czyli niczego
+#  !barb_experiments/...     USUNIĘTE - reguła nadrzędna była zakomentowana,
+#                                       więc negacja nic nie robiła
+#  ~$*.xlsx                  USUNIĘTE - zawiera się w ~$*
+#  *.Rproj.user              USUNIĘTE - zawiera się w .Rproj.user/
+#
+#  Odduplikowane (każde występowało dwa lub trzy razy):
+#  .DS_Store, Thumbs.db, desktop.ini, .Rhistory, .RData, .Rproj.user,
+#  *.aux, *.bbl, *.blg, *.synctex.gz, ~$*
+# ================================================================
+

@@ -1,0 +1,532 @@
+# --- 1. Load Libraries ---
+library(tidyverse)
+library(rugarch)
+library(here)
+
+# --- 2. Load Processed Data ---
+
+# ============================================================
+# DCC-GARCH ANALYSIS: CRITICAL METALS
+# ============================================================
+
+# --- 1. Load Data ---
+df_metals  <- read_csv2(here("R/results_R", "series_and_bubble_up.csv"), show_col_types = FALSE)
+df_prices  <- df_metals[1:17]
+df_dummies <- df_metals[c(1, 18:33)]
+
+
+# --- 2. Data Transformation ---
+# Log returns from log prices
+df_returns <- df_final %>%
+  dplyr::arrange(Date) %>%
+  dplyr::mutate(dplyr::across(-Date, ~ log(.x / dplyr::lag(.x)))) %>%
+  drop_na()
+
+# Align dummies with returns (dropping the first row because returns lose 1 observation)
+df_dummies_aligned <- df_dummies %>%
+  arrange(Date) %>%
+  slice(-1)
+
+
+# --- 3. GARCH-X Estimation ---
+metal_names <- names(df_prices)[names(df_prices) != "Date"]
+
+garch_results <- map(metal_names, function(m_name) {
+  
+  # 1. Prepare data
+  y              <- df_returns[[m_name]]
+  dummy_col_name <- paste0(m_name, "_BD")
+  
+  if (dummy_col_name %in% names(df_dummies_aligned)) {
+    dummy_active <- as.numeric(df_dummies_aligned[[dummy_col_name]])
+  } else {
+    dummy_active <- rep(0, length(y))
+  }
+  
+  has_bubbles <- sum(dummy_active, na.rm = TRUE) > 0
+  
+  # 2. Base "Clean" Specification
+  spec_clean <- ugarchspec(
+    variance.model    = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model        = list(armaOrder = c(5, 0), include.mean = TRUE),
+    distribution.model = "std"
+  )
+  
+  # 3. "Bubble" Specification (if bubbles exist)
+  if (has_bubbles) {
+    ext_reg <- as.matrix(dummy_active)
+    colnames(ext_reg) <- "Bubble"
+    
+    spec_bubble <- ugarchspec(
+      variance.model    = list(model = "sGARCH", garchOrder = c(1, 1), external.regressors = ext_reg),
+      mean.model        = list(armaOrder = c(5, 0), include.mean = TRUE, external.regressors = ext_reg),
+      distribution.model = "std"
+    )
+  } else {
+    spec_bubble <- NULL
+  }
+  
+  # 4. Estimation
+  fit_clean <- tryCatch(
+    ugarchfit(spec = spec_clean, data = y, solver = "hybrid"),
+    error = function(e) NULL
+  )
+  
+  fit_bubble <- if (has_bubbles) {
+    tryCatch(
+      ugarchfit(spec = spec_bubble, data = y, solver = "hybrid"),
+      error = function(e) NULL
+    )
+  } else {
+    NULL
+  }
+  
+  # 5. Convergence checks
+  clean_converged  <- !is.null(fit_clean)  && fit_clean@fit$convergence  == 0
+  bubble_converged <- !is.null(fit_bubble) && fit_bubble@fit$convergence == 0
+  
+  if (!clean_converged)                     message("Clean model failed to converge for: ",  m_name)
+  if (has_bubbles && !bubble_converged)     message("Bubble model failed to converge for: ", m_name)
+  
+  list(
+    clean_model      = fit_clean,
+    bubble_model     = fit_bubble,
+    has_bubbles      = has_bubbles,
+    clean_converged  = clean_converged,
+    bubble_converged = bubble_converged
+  )
+  
+}) %>% set_names(metal_names)
+
+
+# --- 4. Diagnostic Summary Table ---
+diagnostic_summary <- map_df(names(garch_results), function(name) {
+  
+  res_list <- garch_results[[name]]
+  
+  get_diagnostics <- function(fit, model_type) {
+    if (is.null(fit)) return(NULL)
+    
+    log_likelihood <- fit@fit$LLH
+    ic             <- infocriteria(fit)
+    res            <- as.numeric(residuals(fit, standardize = TRUE))
+    lb_test        <- Box.test(res,    lag = 10, type = "Ljung-Box")
+    arch_test      <- Box.test(res^2,  lag = 10, type = "Ljung-Box")
+    
+    tibble(
+      Series        = name,
+      Model_Type    = model_type,
+      Converged     = ifelse(fit@fit$convergence == 0, "Yes", "No"),
+      AIC           = ic[1],
+      BIC           = ic[2],
+      LogLik        = log_likelihood,
+      Alpha1        = if ("alpha1" %in% rownames(fit@fit$matcoef)) fit@fit$matcoef["alpha1", 1] else NA,
+      Beta1         = if ("beta1"  %in% rownames(fit@fit$matcoef)) fit@fit$matcoef["beta1",  1] else NA,
+      AlphaBeta     = Alpha1 + Beta1,
+      LB_P_Value    = round(lb_test$p.value,   3),
+      ARCH_P_Value  = round(arch_test$p.value, 3),
+      P_Bubble_Mean = if ("mxreg1" %in% rownames(fit@fit$matcoef)) fit@fit$matcoef["mxreg1", 4] else NA,
+      P_Bubble_Var  = if ("vxreg1" %in% rownames(fit@fit$matcoef)) fit@fit$matcoef["vxreg1", 4] else NA
+    )
+  }
+  
+  bind_rows(
+    get_diagnostics(res_list$clean_model,  "Clean"),
+    get_diagnostics(res_list$bubble_model, "Bubble")
+  )
+})
+
+print(diagnostic_summary, n = 30)
+
+
+# --- 5. Model Comparison Table ---
+model_comparison <- diagnostic_summary %>%
+  dplyr::select(Series, Model_Type, AIC, BIC, P_Bubble_Mean, P_Bubble_Var) %>%
+  pivot_wider(
+    id_cols     = Series,
+    names_from  = Model_Type,
+    values_from = c(AIC, BIC, P_Bubble_Mean, P_Bubble_Var)
+  ) %>%
+  dplyr::select(
+    Series,
+    AIC_Clean     = AIC_Clean,
+    AIC_Bubble    = AIC_Bubble,
+    BIC_Clean     = BIC_Clean,
+    BIC_Bubble    = BIC_Bubble,
+    P_Bubble_Mean = P_Bubble_Mean_Bubble,
+    P_Bubble_Var  = P_Bubble_Var_Bubble
+  ) %>%
+  mutate(
+    Better_AIC    = ifelse(AIC_Bubble < AIC_Clean, "Bubble", "Clean"),
+    Better_BIC    = ifelse(BIC_Bubble < BIC_Clean, "Bubble", "Clean"),
+    P_Bubble_Mean = round(P_Bubble_Mean, 3),
+    P_Bubble_Var  = round(P_Bubble_Var,  3)
+  ) %>%
+  dplyr::select(Series, AIC_Clean, AIC_Bubble, Better_AIC, BIC_Clean, BIC_Bubble, Better_BIC, P_Bubble_Mean, P_Bubble_Var)
+
+print(model_comparison, width = Inf)
+
+
+# --- 6. Export Standardised Residuals for DCC ---
+df_std_residuals <- purrr::map_dfc(names(garch_results), function(m_name) {
+  fit_clean <- garch_results[[m_name]]$clean_model
+  if (!is.null(fit_clean)) {
+    tibble::tibble(!!m_name := as.numeric(residuals(fit_clean, standardize = TRUE)))
+  }
+})
+
+#write_csv(df_std_residuals, here("R", "results_R", "dcc_std_residual.csv"))
+
+
+# ============================================================
+# DCC ESTIMATION
+# ============================================================
+
+library(rmgarch)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+
+# [NOWE] parametry DCC z dopasowanego modelu
+get_dcc_params <- function(fit) {
+  mc  <- fit@mfit$matcoef
+  ia  <- grep("dcca",   rownames(mc))[1]
+  ib  <- grep("dccb",   rownames(mc))[1]
+  ish <- grep("mshape", rownames(mc))[1]
+  tibble::tibble(
+    dcc_a       = mc[ia, 1],
+    dcc_a_p     = mc[ia, 4],
+    dcc_b       = mc[ib, 1],
+    dcc_b_p     = mc[ib, 4],
+    persistence = mc[ia, 1] + mc[ib, 1],
+    shape       = if (!is.na(ish)) mc[ish, 1] else NA_real_,
+    loglik      = tryCatch(as.numeric(fit@mfit$llh), error = function(e) NA_real_)
+  )
+}
+
+# [NOWE] test Engle-Shepparda; H0: korelacja warunkowa jest STALA
+run_es_test <- function(X, Z = NULL, lags = c(1, 2, 5, 10)) {
+  purrr::map_dfr(lags, function(L) {
+    out <- tryCatch(
+      if (is.null(Z)) rmgarch::DCCtest(X, garchOrder = c(1, 1), n.lags = L)
+      else            rmgarch::DCCtest(X, n.lags = L, Z = Z),
+      error = function(e) NULL)
+    if (is.null(out))
+      return(tibble::tibble(n_lags = L, stat = NA_real_, p_value = NA_real_))
+    nm <- names(out)
+    tibble::tibble(
+      n_lags  = L,
+      stat    = as.numeric(out[[grep("stat",   nm, ignore.case = TRUE)[1]]]),
+      p_value = as.numeric(out[[grep("p.?val", nm, ignore.case = TRUE)[1]]])
+    )
+  })
+}
+
+# Shared univariate GARCH margin specification
+dcc_margin_spec <- rugarch::ugarchspec(
+  variance.model    = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model        = list(armaOrder = c(5, 0), include.mean = TRUE),
+  distribution.model = "std"
+)
+
+# Metal groups for intra-metal DCC
+metal_groups <- list(
+  Nickel  = c("NIDALY", "NILMEX", "NISHFE", "NIWUXI"),
+  Copper  = c("CUDALY", "CUCOMX", "CULMEX", "CUSHFE"),
+  Lithium = c("LIDALY", "LIANTH", "LICOMX", "LILMEX"),
+  Cobalt  = c("CODALY", "COLMEX", "COWUXI", "COCOMX")
+)
+
+
+# --- 7. DCC for Nickel and Copper (standard multivariate) ---
+dcc_all_results <- imap(metal_groups[c("Nickel", "Copper")], function(series_names, group_name) {
+  
+  message("Estimating DCC model for group: ", group_name)
+  
+  returns_matrix <- df_returns %>%
+    dplyr::select(dplyr::all_of(series_names)) %>%
+    as.matrix()
+  
+  n_series  <- length(series_names)
+  multi_spec <- multispec(replicate(n_series, dcc_margin_spec))
+  
+  dcc_spec <- dccspec(uspec = multi_spec, dccOrder = c(1, 1), distribution = "mvt")
+  
+  fit <- tryCatch({
+    dccfit(spec = dcc_spec, data = returns_matrix, solver = "solnp", solver.control = list(trace = 0))
+  }, error = function(e) {
+    message("MVT failed for ", group_name, ". Trying mvnorm...")
+    dcc_spec_norm <- dccspec(uspec = multi_spec, dccOrder = c(1, 1), distribution = "mvnorm")
+    tryCatch(
+      dccfit(spec = dcc_spec_norm, data = returns_matrix, solver = "nlminb"),
+      error = function(e_final) { message("Critical failure for ", group_name); NULL }
+    )
+  })
+  
+  if (is.null(fit)) return(NULL)
+  
+  # [NEW] DCC parameters
+  dcc_params <- get_dcc_params(fit)
+  message("  a = ", round(dcc_params$dcc_a, 4),
+          " (p = ", signif(dcc_params$dcc_a_p, 3), "),  b = ",
+          round(dcc_params$dcc_b, 4),
+          " (p = ", signif(dcc_params$dcc_b_p, 3), "),  a+b = ",
+          round(dcc_params$persistence, 4))
+  
+  # [NEW] Engle-Sheppard test 
+  es_test <- run_es_test(returns_matrix, Z = fit@mfit$stdresid)
+  message("  Engle-Sheppard: ",
+          paste(sprintf("lag %d p = %.4f", es_test$n_lags, es_test$p_value),
+                collapse = " | "))
+  
+  dcc_correlations <- rcor(fit)
+  time_index       <- df_returns$Date
+  
+  plot_data_list <- list()
+  for (i in 1:(n_series - 1)) {
+    for (j in (i + 1):n_series) {
+      pair_name <- paste(series_names[i], "-", series_names[j])
+      plot_data_list[[pair_name]] <- tibble::tibble(
+        Date        = time_index,
+        Pair        = pair_name,
+        Correlation = dcc_correlations[i, j, ]
+      )
+    }
+  }
+  
+  list(
+    model = fit,
+    data  = dplyr::bind_rows(plot_data_list),
+    dcc_params = dcc_params,   # [NOWE]
+    es_test    = es_test       # [NOWE]
+  )
+})
+#### save results
+saveRDS(dcc_all_results, file = here("R/results_R", "dcc_all_results.rds"))
+
+# [NEW] E-S test together
+dcc_summary <- purrr::imap_dfr(dcc_all_results, function(res, nm) {
+  if (is.null(res)) return(NULL)
+  dplyr::bind_cols(tibble::tibble(System = nm), res$dcc_params)
+})
+print(dcc_summary)
+
+es_summary <- purrr::imap_dfr(dcc_all_results, function(res, nm) {
+  if (is.null(res)) return(NULL)
+  dplyr::bind_cols(tibble::tibble(System = nm), res$es_test)
+})
+print(es_summary)
+
+round(cor(fit_4d@mfit$stdresid), 3)
+mean(cor_array[1, 2, ])              # srednia korelacja DCC miedz-nikiel
+cor(fit_4d@mfit$stdresid)[1, 2]      # ta sama para z reszt
+
+
+# --- 8. Article-style plots for Nickel and Copper ---
+theme_article_fixed <- theme_minimal() +
+  theme(
+    panel.grid.major = element_line(color = "#f0f0f0", linewidth = 0.3),
+    panel.grid.minor = element_line(color = "#f8f8f8", linewidth = 0.2),
+    strip.background = element_blank(),
+    strip.text       = element_text(face = "plain", size = 14, color = "black"),
+    axis.title       = element_blank(),
+    axis.text        = element_text(size = 12, color = "gray30"),
+    panel.spacing    = unit(1.2, "lines"),
+    plot.title       = element_blank(),
+    plot.subtitle    = element_blank()
+  )
+
+p_nickel_final <- ggplot(dcc_all_results$Nickel$data, aes(x = Date, y = Correlation)) +
+  geom_line(color = "black", linewidth = 0.4) +
+  facet_wrap(~ Pair, ncol = 3, scales = "fixed") +
+  scale_y_continuous(limits = c(-0.4, 1), breaks = seq(-0.2, 1, 0.2)) +
+  theme_article_fixed
+
+p_copper_final <- ggplot(dcc_all_results$Copper$data, aes(x = Date, y = Correlation)) +
+  geom_line(color = "black", linewidth = 0.4) +
+  facet_wrap(~ Pair, ncol = 3, scales = "fixed") +
+  scale_y_continuous(limits = c(-0.4, 1), breaks = seq(-0.2, 1, 0.2)) +
+  theme_article_fixed
+
+print(p_nickel_final)
+print(p_copper_final)
+
+ggsave("R/graphs_R/correlation_nickel_final.pdf", plot = p_nickel_final, width = 10, height = 6)
+ggsave("R/graphs_R/correlation_copper_final.pdf", plot = p_copper_final, width = 10, height = 6)
+
+ggsave("R/graphs_R/correlation_nickel_final.tiff", plot = p_nickel_final, width = 10, height = 6)
+ggsave("R/graphs_R/correlation_copper_final.tiff", plot = p_copper_final, width = 10, height = 6)
+
+# --- 9. Cross-metal DCC (4 benchmarks) ---
+cross_metals <- c("CUDALY", "NIDALY", "LIDALY", "CODALY")
+
+df_cross <- df_returns %>%
+  dplyr::select(Date, dplyr::all_of(cross_metals)) %>%
+  na.omit()
+
+m_cross <- as.matrix(df_cross %>% dplyr::select(-Date))
+
+spec_4d_mvt <- dccspec(
+  uspec = multispec(replicate(4, dcc_margin_spec)),
+  dccOrder = c(1, 1), distribution = "mvt"
+)
+
+spec_4d_norm <- dccspec(
+  uspec = multispec(replicate(4, dcc_margin_spec)),
+  dccOrder = c(1, 1), distribution = "mvnorm"
+)
+
+message("Starting 4D DCC model estimation...")
+
+fit_4d <- tryCatch({
+  dccfit(spec = spec_4d_mvt, data = m_cross, solver = "solnp")
+}, error = function(e) {
+  message("MVT with SEs failed. Trying mvnorm with SEs...")
+  tryCatch(
+    dccfit(spec = spec_4d_norm, data = m_cross, solver = "solnp"),
+    error = function(e2) {
+      message("Falling back to MVT without standard errors.")
+      tryCatch(
+        dccfit(spec = spec_4d_mvt, data = m_cross, solver = "solnp",
+               fit.control = list(eval.se = FALSE)),
+        error = function(e3) { message("Critical error: 4D model could not be estimated."); NULL })
+    })
+})
+
+# Extract and plot cross-metal correlations
+if (!is.null(fit_4d) && inherits(fit_4d, "DCCfit")) {
+  
+  has_se <- !all(is.na(fit_4d@mfit$matcoef[, 2]))
+  message("4D model - standard errors available: ", has_se)
+  
+  # [NEW] DCC parameters
+  dcc_params_4d <- get_dcc_params(fit_4d)
+  print(dcc_params_4d)
+  
+  # [NEW] Engle-Sheppard test  
+  es_test_4d <- run_es_test(m_cross, Z = fit_4d@mfit$stdresid) 
+  print(es_test_4d)
+  
+  saveRDS(list(params = dcc_params_4d, es = es_test_4d, has_se = has_se),
+          file = "R/results_R/dcc_4d_diagnostics.rds")
+  
+  cor_array    <- rcor(fit_4d)
+  pair_indices <- combn(1:4, 2)
+  
+  df_cross_correlations <- dplyr::bind_rows(lapply(1:ncol(pair_indices), function(i) {
+    idx1 <- pair_indices[1, i]
+    idx2 <- pair_indices[2, i]
+    tibble::tibble(
+      Date        = df_cross$Date,
+      Pair        = paste(cross_metals[idx1], "-", cross_metals[idx2]),
+      Correlation = cor_array[idx1, idx2, ]
+    )
+  }))
+  saveRDS(df_cross_correlations, file = "R/results_R/df_cross_correlations_4d.rds")
+  message("Dane korelacji 4D zosta³y pomyœlnie zapisane!")
+  
+  plot_cross_metals <- ggplot(df_cross_correlations, aes(x = Date, y = Correlation)) +
+    geom_line(color = "black", linewidth = 0.4) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray80", linewidth = 0.3) +
+    facet_wrap(~ Pair, ncol = 3, scales = "fixed") +
+    scale_y_continuous(limits = c(-0.5, 1), breaks = seq(-0.5, 1, 0.25)) +
+    theme_article_fixed
+  
+  print(plot_cross_metals)
+  ggsave("R/graphs_R/DCC_4metals_v2.pdf", plot = plot_cross_metals, width = 10, height = 6)
+  
+} else {
+  message("4D estimation failed. Consider running bivariate models for Lithium and Cobalt.")
+}
+
+
+
+
+# --- 10. Bivariate DCC for Lithium and Cobalt ---
+target_groups <- list(
+  Lithium = c("LIDALY", "LIANTH", "LICOMX", "LILMEX"),
+  Cobalt  = c("CODALY", "COLMEX", "COWUXI", "COCOMX")
+)
+
+dcc_lithium_cobalt_results <- imap(target_groups, function(series_names, group_name) {
+  
+  message("GROUP: ", group_name)
+  all_pairs <- combn(series_names, 2, simplify = FALSE)
+  
+  pair_results <- map(all_pairs, function(pair) {
+    message("--> Pair: ", paste(pair, collapse = " vs "))
+    
+    pair_data <- df_returns %>%
+      dplyr::select(Date, dplyr::all_of(pair)) %>%
+      na.omit()
+    
+    m_data <- as.matrix(pair_data %>% dplyr::select(-Date))
+    
+    fit1 <- tryCatch(rugarch::ugarchfit(spec = dcc_margin_spec, data = m_data[, 1], solver = "hybrid"), error = function(e) NULL)
+    fit2 <- tryCatch(rugarch::ugarchfit(spec = dcc_margin_spec, data = m_data[, 2], solver = "hybrid"), error = function(e) NULL)
+    
+    if (is.null(fit1) || is.null(fit2) ||
+        rugarch::convergence(fit1) != 0 || rugarch::convergence(fit2) != 0) {
+      message("    Skipping: univariate GARCH failed to converge.")
+      return(NULL)
+    }
+    
+    spec_dcc_mvt <- dccspec(
+      uspec = multispec(replicate(2, dcc_margin_spec)),
+      dccOrder = c(1, 1), distribution = "mvt"
+    )
+    
+    fit_dcc <- tryCatch({
+      dccfit(spec = spec_dcc_mvt, data = m_data, solver = "solnp")
+    }, error = function(e) {
+      spec_dcc_norm <- dccspec(multispec(replicate(2, dcc_margin_spec)), distribution = "mvnorm")
+      tryCatch(dccfit(spec = spec_dcc_norm, data = m_data, solver = "solnp"), error = function(e2) NULL)
+    })
+    
+    if (!inherits(fit_dcc, "DCCfit")) return(NULL)
+    
+    cor_data <- tryCatch({
+      rc <- rcor(fit_dcc)
+      if (is.null(rc) || length(dim(rc)) < 3) stop("Empty")
+      rc[1, 2, ]
+    }, error = function(e) NULL)
+    
+    if (is.null(cor_data)) return(NULL)
+    message("    SUCCESS.")
+    
+    tibble::tibble(
+      Date        = pair_data$Date,
+      Pair        = paste(pair, collapse = " - "),
+      Correlation = cor_data
+    )
+  })
+  
+  df_group <- dplyr::bind_rows(compact(pair_results))
+  
+  p <- if (nrow(df_group) > 0) {
+    ggplot(df_group, aes(x = Date, y = Correlation, color = Pair)) +
+      geom_line(linewidth = 0.7, alpha = 0.8) +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+      scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.2)) +
+      theme_minimal() +
+      labs(
+        title    = paste("Dynamic Conditional Correlations:", group_name),
+        subtitle = "Pairwise DCC-GARCH correlations",
+        x        = "Year",
+        y        = "Correlation",
+        color    = "Metal Pairs"
+      ) +
+      theme(legend.position = "bottom", legend.text = element_text(size = 8))
+  } else NULL
+  
+  list(data = df_group, plot = p)
+})
+
+print(dcc_lithium_cobalt_results$Lithium$plot)
+print(dcc_lithium_cobalt_results$Cobalt$plot)
+
+ggsave("R/graphs_R/DCC_Lithium.pdf", plot = dcc_lithium_cobalt_results$Lithium$plot, width = 10, height = 6)
+ggsave("R/graphs_R/DCC_Cobalt.pdf",  plot = dcc_lithium_cobalt_results$Cobalt$plot,  width = 10, height = 6)
+
+

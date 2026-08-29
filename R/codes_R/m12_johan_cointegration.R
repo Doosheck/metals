@@ -8,72 +8,6 @@ library(kableExtra)
 
 
 
-#---- Single metal example ----
-# 
-# 
-# # --- 1. Filter Cobalt Series ---
-# df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
-#   show_col_types = FALSE, 
-#   guess_max = 10000)
-# 
-# # Adjust the pattern "CO" to match your specific Cobalt column names
-# cobalt_data <- df_final %>%
-#   dplyr::select(CODALY, COLMEX, COLMEA, COWUXI) %>% 
-#   mutate(across(everything(), ~ log(.x))) %>%
-#   as.matrix()
-# 
-# head(cobalt_data)
-# dim(cobalt_data)
-# 
-# df_dummies <- read_csv(here("data", "bubble_dummies.csv"), 
-#                      show_col_types = FALSE, 
-#                      guess_max = 10000) 
-# # Prepare the Dummy Matrix 
-# cobalt_dummies <- df_dummies %>%
-#   dplyr::select(CODALY, COLMEX, COLMEA, COWUXI) %>%
-#   rename_with(~ paste0(.x, "_DV")) %>%
-#   # Ensure no rows have NA values
-#   drop_na() %>%
-#   as.matrix()
-# 
-# head(cobalt_dummies)
-# dim(cobalt_dummies)
-# 
-# # --- 2. Lag Selection ---
-# # Cointegration tests are highly sensitive to the lag structure
-# # We include the dummies in the lag selection to ensure the optimal lag 
-# # isn't being skewed by the bubble variance.
-# 
-# cobalt_lags <- VARselect(cobalt_data, lag.max = 10, type = "const")
-# best_lag <- cobalt_lags$selection["AIC(n)"]
-# 
-# cobalt_lags_ex <- VARselect(cobalt_data, 
-#                          lag.max = 10, 
-#                          type = "const", 
-#                          exogen = cobalt_dummies)
-# 
-# best_lag_ex <- cobalt_lags$selection["AIC(n)"]
-# # no exogenous variables
-# 
-# best_lag
-# 
-# # --- 3. Johansen Test (Trace) ---
-# # K is the number of lags. ecdet="const" allows for a drift in the price levels
-# 
-# jo_cobalt <- ca.jo(cobalt_data, 
-#                    type = "trace", 
-#                    ecdet = "const", 
-#                    K = best_lag)
-# 
-# jo_cobalt_ex <- ca.jo(cobalt_data, 
-#                    type = "trace", 
-#                    ecdet = "const", 
-#                    K = best_lag,
-#                    dumvar = cobalt_dummies)
-# # --- 4. Interpretation ---
-# summary(jo_cobalt)
-# summary(jo_cobalt_ex)
-
 #---- Four metals and function Sonet 4.5----
 
 library(vars)
@@ -81,15 +15,6 @@ library(urca)
 library(here)
 library(tidyverse)
 library(kableExtra)
-
-# --- Read Data Once ---
-# df_final <- read_csv(here("data", "combined_metals_cleaned.csv"), 
-#                      show_col_types = FALSE, 
-#                      guess_max = 10000)
-# 
-# df_dummies <- read_csv(here("data", "bubble_dummies.csv"), 
-#                        show_col_types = FALSE, 
-#                        guess_max = 10000)
 
 #file with df_final_dataset_up: "R/results_R", "series_and_bubble_up_down.csv")
 #W artykule s¹ bubbles_up
@@ -594,62 +519,6 @@ latex_table_data <- bind_rows(raw_data, filtered_data)
 # --- Display preview ---
 print(latex_table_data)
 
-#----Gemini 2 ----
-
-# trace_cols <- names(latex_table_data)[grepl("^r", names(latex_table_data))]
-# 
-# # --- main rows---
-# main_rows <- latex_table_data %>%
-#   mutate(
-#     Metal = ifelse(Metal == "", Model, Metal),
-#     # GÅ‚Ã³wne wartoÅ›ci Alpha
-#     Follower_Disp = sprintf("%.3f", as.numeric(`Max Î±`)),
-#     Leader_Disp = sprintf("%.3f", as.numeric(`Min Î±`))
-#   ) %>%
-#   # Wybieramy kolumny w konkretnej kolejnoÅ›ci
-#   dplyr::select(Metal, Rank, all_of(trace_cols), Follower_Disp, Leader_Disp) %>%
-#   mutate(across(everything(), as.character))
-# 
-# # --- proxy rows ---
-# name_rows <- latex_table_data %>%
-#   mutate(
-#     Metal = "",
-#     Rank = "",
-#     Follower_Disp = Follower,
-#     Leader_Disp = Leader
-#   ) %>%
-#   mutate(across(all_of(trace_cols), ~ "")) %>% #fill empty cols with ""
-#   dplyr::select(Metal, Rank, all_of(trace_cols), Follower_Disp, Leader_Disp) %>%
-#   mutate(across(everything(), as.character))
-# 
-# # --- mix of rows ---
-# final_table <- map_dfr(1:nrow(main_rows), ~ {
-#   bind_rows(main_rows[.x, ], name_rows[.x, ])
-# })
-# 
-# trace_cols_names <- names(final_table)[grepl("^r", names(final_table))]
-# 
-# latex_output_final <- final_table %>%
-#   kbl(format = "latex",
-#       booktabs = TRUE,
-#       escape = FALSE,
-#       align = c("l", "c", rep("c", length(trace_cols_names)), "c", "c"),
-#       # rename cols:
-#       col.names = c("Metal", "$r$", trace_cols_names, "Follower", "Leader"),
-#       linesep = c("", "\\addlinespace"), 
-#       caption = "Johansen Cointegration Tests and Price Discovery",
-#       label = "tab:johansen") %>% 
-#   kable_styling(latex_options = c("hold_position"), font_size = 10) %>%
-#   column_spec(1, bold = TRUE, width = "2.5cm") %>%
-#   # dynamic width of two last cols (Follower/Leader)
-#   column_spec((ncol(final_table)-1):ncol(final_table), width = "2.2cm") %>%
-#   add_header_above(c(" " = 2, 
-#                    "Trace Statistics" = length(trace_cols_names), 
-#                    "Max $|\\alpha|$" = 1, 
-#                    "Min $|\\alpha|$" = 1))
-# 
-# 
-# cat(latex_output_final)
 
 #---- Gemini3 ----
 #kod do tabeli
@@ -722,5 +591,4 @@ writeLines(as.character(latex_output_final), "R/tables/johansen_results.tex")
 # save to csv R/tables
 write.csv2(latex_table_data, "R/tables/johansen_results.csv", row.names = FALSE)
 
-# (Opcjonalnie) Jeœli wolisz mieæ w Excelu uk³ad z pustymi wierszami pod nazwy Leader/Follower, odkomentuj poni¿sz¹ liniê:
-# write.csv2(final_table, "gotowa_tabela_johansen_przeplatana.csv", row.names = FALSE)
+

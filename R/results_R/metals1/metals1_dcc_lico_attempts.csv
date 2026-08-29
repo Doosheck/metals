@@ -1,0 +1,13 @@
+Metal;Pair;Margins_OK;DCC_OK;Variant;Mean_Rho;Note
+Lithium;LIDALY - LIANTH;TRUE;TRUE;mvt;0,0098;converged
+Lithium;LIDALY - LICOMX;TRUE;TRUE;mvt;0,0117;converged
+Lithium;LIDALY - LILMEX;TRUE;TRUE;mvt;0,0046;converged
+Lithium;LIANTH - LICOMX;TRUE;FALSE;NA;NA;DCC did not converge
+Lithium;LIANTH - LILMEX;TRUE;FALSE;NA;NA;DCC did not converge
+Lithium;LICOMX - LILMEX;TRUE;TRUE;mvt;0,0422;converged
+Cobalt;CODALY - COLMEX;TRUE;TRUE;mvt;0,7354;converged
+Cobalt;CODALY - COWUXI;TRUE;FALSE;NA;NA;DCC did not converge
+Cobalt;CODALY - COCOMX;TRUE;TRUE;mvt;0,1101;converged
+Cobalt;COLMEX - COWUXI;TRUE;TRUE;mvt;-0,0052;converged
+Cobalt;COLMEX - COCOMX;TRUE;TRUE;mvt;0,1336;converged
+Cobalt;COWUXI - COCOMX;TRUE;TRUE;mvt;-0,0125;converged

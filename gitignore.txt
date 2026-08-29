@@ -1,0 +1,44 @@
+# --- rename this file to .gitignore ---
+
+# R / RStudio session state
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+*.Rproj.user
+
+# renv: track renv.lock and the settings, never the library
+renv/library/
+renv/local/
+renv/staging/
+renv/python/
+renv/sandbox/
+
+# Fitted model objects and Monte Carlo caches: large and fully regenerable
+# (m11 uses seed 123, so the critical values reproduce exactly).
+# If a particular .rds is small and saves real compute for a reader, you can
+# force it in with:  git add -f R/results_R/dcc_all_results.rds
+*.rds
+
+# Print-resolution rasters for the publisher; the PDFs are tracked instead
+*.tiff
+*.tif
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Manuscript sources - the paper itself does not belong in a code repository.
+# NOTE: no blanket *.tex rule here on purpose. The LaTeX tables the scripts
+# generate (metals1_tab2.tex, metals1_tab3.tex, metals1_tab4.tex) are part of
+# the output and are tracked.
+*.docx
+~$*
+
+# LaTeX build artefacts, if you ever compile something here
+*.aux
+*.bbl
+*.blg
+*.synctex.gz

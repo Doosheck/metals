@@ -1,0 +1,5 @@
+Measure;Method;N;Estimate;P_Value
+Days_in_Bubble;pearson;16;0,1875;0,4868
+Days_in_Bubble;spearman;16;0,3515;0,1819
+Number_of_Bubbles;pearson;16;0,1609;0,5516
+Number_of_Bubbles;spearman;16;0,3514;0,1820
