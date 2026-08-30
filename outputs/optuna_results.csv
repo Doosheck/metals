@@ -1,4 +1,5 @@
-Metal,Variant,Model,CV_default,CV_tuned,Holdout_AUC_default,Holdout_AUC_tuned,Delta_AUC_holdout,Holdout_AP_default,Holdout_AP_tuned,Holdout_days,Holdout_bubble_days,Best_Params
-Cobalt,gsadf_ols,RF,0.908,0.921,0.741,0.762,0.021,0.616,0.663,418,36,"{'n_estimators': 105, 'max_depth': 12, 'min_samples_leaf': 6, 'max_features': 'log2'}"
-Copper,lppls_0.01_period,LightGBM,0.539,0.624,0.599,0.541,-0.058,0.177,0.157,418,67,"{'n_estimators': 173, 'learning_rate': 0.07934237918397923, 'num_leaves': 124, 'max_depth': 7, 'reg_alpha': 3.3654396660163637, 'reg_lambda': 0.2087833259486729, 'min_child_samples': 18, 'subsample': 0.6712551170760844, 'colsample_bytree': 0.6127482014103954}"
-Lithium,gsadf_ols,LightGBM,0.618,0.827,0.969,0.99,0.021,0.741,0.843,418,8,"{'n_estimators': 187, 'learning_rate': 0.06338734634267867, 'num_leaves': 119, 'max_depth': 8, 'reg_alpha': 0.012507266280050125, 'reg_lambda': 0.014136864353486895, 'min_child_samples': 7, 'subsample': 0.8072655326142487, 'colsample_bytree': 0.8332992688984392}"
+Metal,Variant,Model,AUC_base,AUC_tuned,Delta_AUC,Best_Params
+Cobalt,gsadf_ols,RF,0.786,0.782,-0.004,"{'n_estimators': 100, 'max_depth': 14, 'min_samples_leaf': 16, 'max_features': 'sqrt'}"
+Copper,gsadf_updown_period,XGBoost,0.974,0.937,-0.037,"{'max_depth': 2, 'learning_rate': 0.19746667477402383, 'n_estimators': 478, 'subsample': 0.8976378813639538, 'colsample_bytree': 0.9608110728304884, 'reg_alpha': 0.223740705733169, 'reg_lambda': 0.16054966450320599}"
+Lithium,gsadf_updown,XGBoost,0.597,0.602,0.005,"{'max_depth': 2, 'learning_rate': 0.16195826958536197, 'n_estimators': 350, 'subsample': 0.9180306490853406, 'colsample_bytree': 0.8665343705898011, 'reg_alpha': 0.20487320798157851, 'reg_lambda': 0.29027368316730995}"
+Nickel,gsadf_updown,LASSO,0.989,0.992,0.003,{'C': 0.653821171462215}
